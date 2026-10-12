@@ -470,12 +470,8 @@ def write_manifest(entries: list[MonthFile], total_rows: int, n_stations: int) -
 
 @app.command()
 def main(
-    start: str = typer.Option(
-        None, help=f"Primer mes YYYY-MM (default: {DATA_START:%Y-%m})"
-    ),
-    end: str = typer.Option(
-        None, help=f"Último mes YYYY-MM (default: {DATA_END:%Y-%m})"
-    ),
+    start: str = typer.Option(None, help=f"Primer mes YYYY-MM (default: {DATA_START:%Y-%m})"),
+    end: str = typer.Option(None, help=f"Último mes YYYY-MM (default: {DATA_END:%Y-%m})"),
     workers: int = typer.Option(6, help="Hilos de descarga en paralelo"),
     skip_download: bool = typer.Option(
         False, help="No descargar; usa los CSV ya presentes en data/raw/csv"
