@@ -77,17 +77,6 @@ mlflow ui                             # UI en http://127.0.0.1:5000
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
 - El entrenamiento se vuelve con `python -m mibici.modeling.train` (en desarrollo).
 
-## Comandos útiles
-
-```bash
-make help         # lista de comandos
-make requirements # instala dependencias
-make test         # pytest
-make lint         # ruff check + format --check
-make format       # aplica formato
-make data         # ingesta completa
-```
-
 ## Estructura del proyecto
 
 ```
