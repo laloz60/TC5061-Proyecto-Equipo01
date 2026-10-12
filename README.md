@@ -11,8 +11,10 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 |    | Pregunta | Tarea | Responsable |
 |----|----------|-------|-------------|
 | P1 | ¿Cuántos viajes se iniciarán en una estación en un periodo futuro? | Regresión | [@laloz60](https://github.com/laloz60) |
-| P2 | ¿Una estación estará en riesgo de quedarse sin bicis/anclajes en un periodo futuro? | Clasificación | [@GemmaMartinez](https://github.com/GemmaMartinez) |
+| P2 | ¿Una estación estará en riesgo de quedarse sin bicis/anclajes en un periodo futuro? | Clasificación | [@GemmaMartinez](https://github.com/GemmaMartinez) + [@smuciton](https://github.com/smuciton) |
 | P3 | ¿Qué grupos de estaciones comparten patrones de uso y dónde se ubican? | Clustering | [@JesusTafolla](https://github.com/JesusTafolla) |
+
+> **Reparto de P2:** es la tarea más pesada (diseño del proxy de riesgo + baseline de clasificación + evidencia MLflow), así que se divide en dos: **@smuciton** diseña y justifica el proxy de riesgo (#6) y **@GemmaMartinez** implementa el baseline de clasificación con su run en MLflow (#7).
 
 ## Datos
 
@@ -134,6 +136,6 @@ make data         # ingesta completa
 | Integrante | GitHub | Responsabilidades |
 |------------|--------|-------------------|
 | Gerardo Lozano | [@laloz60](https://github.com/laloz60) | Infra e ingesta de datos, `features.py`, P1 baseline de regresión, README |
-| Gemma Martínez | [@GemmaMartinez](https://github.com/GemmaMartinez) | Proxy de riesgo P2, baseline de clasificación, evidencia MLflow |
-| Jesús Tafolla | [@JesusTafolla](https://github.com/JesusTafolla) | Clustering P3, propuesta de modelos y métricas |
-| smuciton | [@smuciton](https://github.com/smuciton) | Definición de datos y condiciones de uso, diagrama de arquitectura |
+| Gemma Martínez | [@GemmaMartinez](https://github.com/GemmaMartinez) | P2 — baseline de clasificación (#7), evidencia MLflow (#11) |
+| Jesús Tafolla | [@JesusTafolla](https://github.com/JesusTafolla) | Clustering P3 (#8), propuesta de modelos y métricas (#9) |
+| smuciton | [@smuciton](https://github.com/smuciton) | Definición de datos y condiciones de uso (#2), diagrama de arquitectura (#3), P2 — proxy de riesgo (#6) |
