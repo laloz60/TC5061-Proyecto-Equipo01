@@ -31,12 +31,15 @@ FIGURES_DIR = REPORTS_DIR / "figures"
 
 MIBICI_OPEN_DATA_URL = "https://mibici.net/es/datos-abiertos"
 
-# Rango completo del histórico publicado por MiBici
-DATA_START = date(2014, 12, 1)
+# Corte del equipo: solo datos POSTpandemia. La emergencia sanitaria por COVID-19
+# terminó en mayo 2023 (OMS 2023-05-05; México mayo 2023), así que el dataset
+# arranca en 2023-05: la operación de MiBici ya no está distorsionada por
+# restricciones de movilidad y refleja el patrón actual del sistema.
+DATA_START = date(2023, 5, 1)
 DATA_END = date(2026, 9, 30)
 
 # Archivos unificados que produce la ingesta (dataset.py)
-UNIFIED_TRIPS_PATH = RAW_DATA_DIR / "mibici_viajes_diciembre_2014_a_septiembre_2026.parquet"
+UNIFIED_TRIPS_PATH = RAW_DATA_DIR / "mibici_viajes_2023_05_a_2026_09.parquet"
 NOMENCLATURA_CSV_PATH = RAW_DATA_DIR / "nomenclatura_2026_09.csv"
 NOMENCLATURA_PARQUET_PATH = RAW_DATA_DIR / "nomenclatura_estaciones.parquet"
 MANIFEST_PATH = DATA_DIR / "manifest.json"
@@ -53,7 +56,7 @@ TRAIN_END = date(2024, 12, 31)
 # Ventana de validación: (TRAIN_END .. VAL_END]
 VAL_END = date(2025, 6, 30)
 # Ventana de prueba: (VAL_END .. DATA_END]
-# Es decir: train 2014-12..2024-12 | val 2025-01..2025-06 | test 2025-07..2026-09
+# Es decir: train 2023-05..2024-12 | val 2025-01..2025-06 | test 2025-07..2026-09
 
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135

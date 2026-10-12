@@ -8,16 +8,19 @@ import pytest
 from typer.testing import CliRunner
 
 from mibici import dataset as ds
-from mibici.config import MANIFEST_PATH, UNIFIED_TRIPS_PATH
+from mibici.config import DATA_END, DATA_START, MANIFEST_PATH, UNIFIED_TRIPS_PATH
 from mibici.dataset import app, catalog, normalize_columns, read_csv_normalized
 
 runner = CliRunner()
 
 
-def test_catalog_cover_full_history():
-    entries = catalog(start=(2014, 12), end=(2026, 9))
-    assert len(entries) == 142
-    assert entries[0].label == "2014-12"
+def test_catalog_cover_post_pandemic_history():
+    entries = catalog(
+        start=(DATA_START.year, DATA_START.month),
+        end=(DATA_END.year, DATA_END.month),
+    )
+    assert len(entries) == 41
+    assert entries[0].label == "2023-05"
     assert entries[-1].label == "2026-09"
 
 
@@ -63,7 +66,11 @@ def test_unified_parquet_exists_and_is_non_empty():
     if not UNIFIED_TRIPS_PATH.exists():
         pytest.skip("ingesta no ejecutada todavía")
 
-    assert pq.ParquetFile(UNIFIED_TRIPS_PATH).metadata.num_rows == 39_078_840
+    rows = pq.ParquetFile(UNIFIED_TRIPS_PATH).metadata.num_rows
+    assert rows > 0
+    if MANIFEST_PATH.exists():
+        manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        assert rows == manifest["total_rows"]
 
 
 def test_manifest_is_versioned_and_complete():
@@ -71,9 +78,12 @@ def test_manifest_is_versioned_and_complete():
         pytest.skip("ingesta no ejecutada todavía")
 
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-    assert manifest["n_months"] == 142
-    assert manifest["total_rows"] == 39_078_840
-    assert len(manifest["files"]) == 142
+    assert manifest["n_months"] == 41
+    assert manifest["first_month"] == "2023-05"
+    assert manifest["last_month"] == "2026-09"
+    assert manifest["total_rows"] > 0
+    assert manifest["total_rows"] == manifest["unified_parquet"]["rows"]
+    assert len(manifest["files"]) == 41
     assert all(len(f["sha256"]) == 64 for f in manifest["files"])
     assert len(manifest["unified_parquet"]["sha256"]) == 64
 
@@ -131,7 +141,7 @@ def test_cli_force_skips_confirmation_and_runs(tmp_path, monkeypatch):
     monkeypatch.setattr(ds, "UNIFIED_TRIPS_PATH", fake)
     monkeypatch.setattr(ds, "download_all", lambda *a, **k: None)
     monkeypatch.setattr(ds, "build_nomenclatura", lambda: 484)
-    monkeypatch.setattr(ds, "build_unified_parquet", lambda entries: 39_078_840)
+    monkeypatch.setattr(ds, "build_unified_parquet", lambda entries: 1_000_000)
     monkeypatch.setattr(ds, "write_manifest", lambda *a, **k: None)
 
     result = runner.invoke(app, ["--force"])
