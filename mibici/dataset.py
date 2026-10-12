@@ -1,11 +1,11 @@
 """Ingesta reproducible de los datos abiertos de MiBici.
 
-Descarga el histórico completo de viajes (diciembre 2014 – septiembre 2026,
-142 archivos mensuales) y la nomenclatura de estaciones desde el portal de
-datos abiertos de MiBici, normaliza esquemas y codificación, y escribe un
-único archivo Parquet unificado más un manifiesto versionable (SHA-256 por
-archivo) que permite reconstruir exactamente los mismos datos en cualquier
-computadora.
+Descarga el histórico postpandemia de viajes (mayo 2023 – septiembre 2026,
+41 archivos mensuales; ver `DATA_START` en config.py) y la nomenclatura de
+estaciones desde el portal de datos abiertos de MiBici, normaliza esquemas y
+codificación, y escribe un único archivo Parquet unificado más un manifiesto
+versionable (SHA-256 por archivo) que permite reconstruir exactamente los
+mismos datos en cualquier computadora.
 
 Uso:
     python -m mibici.dataset                  # descarga todo y unifica
@@ -33,6 +33,8 @@ import typer
 
 from mibici.config import (
     DATA_DIR,
+    DATA_END,
+    DATA_START,
     MANIFEST_PATH,
     MIBICI_OPEN_DATA_URL,
     NOMENCLATURA_CSV_PATH,
@@ -353,8 +355,8 @@ def build_unified_parquet(entries: list[MonthFile]) -> int:
     """Unifica todos los meses en un solo Parquet, mes a mes (streaming).
 
     Se procesa un mes a la vez con pyarrow.ParquetWriter para no necesitar
-    decenas de GB de RAM: 39M de viajes no caben en un DataFrame de pandas.
-    Regresa el total de filas escritas.
+    decenas de GB de RAM: el histórico completo no cabe en un DataFrame de
+    pandas. Regresa el total de filas escritas.
     """
     UNIFIED_TRIPS_PATH.parent.mkdir(parents=True, exist_ok=True)
     schema = None
@@ -468,8 +470,12 @@ def write_manifest(entries: list[MonthFile], total_rows: int, n_stations: int) -
 
 @app.command()
 def main(
-    start: str = typer.Option(None, help="Primer mes YYYY-MM (default: 2014-12)"),
-    end: str = typer.Option(None, help="Último mes YYYY-MM (default: 2026-09)"),
+    start: str = typer.Option(
+        None, help=f"Primer mes YYYY-MM (default: {DATA_START:%Y-%m})"
+    ),
+    end: str = typer.Option(
+        None, help=f"Último mes YYYY-MM (default: {DATA_END:%Y-%m})"
+    ),
     workers: int = typer.Option(6, help="Hilos de descarga en paralelo"),
     skip_download: bool = typer.Option(
         False, help="No descargar; usa los CSV ya presentes en data/raw/csv"
@@ -490,7 +496,10 @@ def main(
         year, month = ym.split("-")
         return int(year), int(month)
 
-    entries = catalog(start=parse(start), end=parse(end))
+    entries = catalog(
+        start=parse(start) or (DATA_START.year, DATA_START.month),
+        end=parse(end) or (DATA_END.year, DATA_END.month),
+    )
     if limit:
         entries = entries[:limit]
     if not entries:
@@ -506,7 +515,7 @@ def main(
             f"{existing_rows:,} filas): {UNIFIED_TRIPS_PATH.name}"
         )
         logger.warning(
-            "Regenerarlo vuelve a descargar los 142 CSVs (~3 GB) y sobrescribe el archivo actual."
+            f"Regenerarlo vuelve a descargar los {len(entries)} CSVs y sobrescribe el archivo actual."
         )
         if not typer.confirm("¿Continuar?", default=False):
             logger.info(
