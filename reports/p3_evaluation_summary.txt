@@ -1,0 +1,11 @@
+=== REPORTE DE EVALUACIÓN DE PREDICCIONES P3 ===
+Total de estaciones evaluadas: 484
+
+--- Distribución de Estaciones por Clúster ---
+Clúster 0: 117 estaciones (24.17%)
+Clúster 1: 163 estaciones (33.68%)
+Clúster 2: 120 estaciones (24.79%)
+Clúster 3: 71 estaciones (14.67%)
+Clúster 4: 13 estaciones (2.69%)
+
+Silhouette Score en Inferencia: 0.1600
