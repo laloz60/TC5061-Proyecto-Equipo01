@@ -64,8 +64,16 @@ data/manifest.json                                 # versionado: totales + SHA-2
 Verificación de que tus datos son idénticos a los del equipo:
 
 ```bash
-pytest            # 8 pruebas de ingesta y manifiesto
+pytest            # pruebas de ingesta, manifiesto y features
 ```
+
+## Features (P1 y P2)
+
+```bash
+python -m mibici.features
+```
+
+Genera `data/processed/features_estacion_hora.parquet` con una fila por estación y hora: salidas, llegadas, variables de calendario, lags, promedios y capacidad de la estación. Los lags y promedios solo usan horas anteriores.
 
 ## Experimentos (MLflow)
 
