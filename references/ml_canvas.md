@@ -6,7 +6,7 @@
 - **Integración:** Tableros operativos y alertas automatizadas que guían el trabajo diario de los operadores.
 
 ## 2. Data Sources (Fuentes de Datos)
-- Portal de Datos Abiertos de MiBici (CSV mensuales de viajes del periodo post-pandemia 2023–2025).
+- Portal de Datos Abiertos de MiBici (CSV mensuales de viajes del periodo post-pandemia **2023-05 a 2026-09**: 41 meses, 15,376,127 viajes, 484 estaciones; ver `mibici/config.py` y `data/manifest.json`).
 - Archivos de nomenclatura de estaciones con capacidad de anclajes (`dpcapacity`).
 
 ## 3. Data Collection (Recolección y Actualización)
@@ -29,7 +29,8 @@
 - Enrutamiento dinámico de camionetas para rebalanceo preventivo y expansión de cicloestaciones.
 
 ## 8. Impact Simulation (Simulación de Impacto)
-- Disminución estimada del 15% en estaciones vacías/saturadas y reducción de costos operativos.
+- **Hipótesis a validar (sin cuantificación previa):** las alertas de rebalanceo preventivo reducen la frecuencia de estaciones vacías/saturadas y los costos logísticos de reubicación.
+- **Cómo se medirá:** contar eventos de estación vacía/saturada en el periodo de prueba (2025-07 a 2026-09) bajo el modelo vs. la línea base (*baseline* ingenuo) y reportar la reducción porcentual en `reports/`. La cifra se llena solo con resultados de los runs en MLflow.
 
 ## 9. Monitoring (Monitoreo)
 - Seguimiento periódico de métricas (`test_rmse`, `test_roc_auc`, `test_silhouette_score`) y supervisión de deriva de datos.
