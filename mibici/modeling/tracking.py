@@ -1,13 +1,3 @@
-"""Metadatos de trazabilidad comunes a todos los runs de MLflow (#22).
-
-Cada run del experimento `mibici-equipo01` debe poder reproducirse: qué
-código (commit), qué datos (hash del manifiesto y del Parquet unificado) y
-qué ventanas temporales se usaron. Todo se lee de `config.py` y de
-`data/manifest.json`; nada va escrito a mano en el código de entrenamiento.
-"""
-
-from __future__ import annotations
-
 from datetime import timedelta
 import hashlib
 import json
@@ -18,40 +8,38 @@ from mibici.config import DATA_END, DATA_START, MANIFEST_PATH, PROJ_ROOT, TRAIN_
 EXPERIMENT_NAME = "mibici-equipo01"
 
 
-def git_commit() -> str:
-    """SHA del commit actual; 'desconocido' si no hay repositorio git."""
+def git_commit():
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=PROJ_ROOT, text=True, stderr=subprocess.DEVNULL
-        ).strip()
+        salida = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROJ_ROOT)
+        return salida.decode().strip()
     except (OSError, subprocess.CalledProcessError):
         return "desconocido"
 
 
-def split_params() -> dict[str, str]:
-    """Ventanas train/val/test de `config.py` como params de MLflow."""
+def split_params():
+    """Fechas de train, val y test (de config.py)."""
     return {
-        "train_start": DATA_START.isoformat(),
-        "train_end": TRAIN_END.isoformat(),
-        "val_start": (TRAIN_END + timedelta(days=1)).isoformat(),
-        "val_end": VAL_END.isoformat(),
-        "test_start": (VAL_END + timedelta(days=1)).isoformat(),
-        "test_end": DATA_END.isoformat(),
+        "train_start": str(DATA_START),
+        "train_end": str(TRAIN_END),
+        "val_start": str(TRAIN_END + timedelta(days=1)),
+        "val_end": str(VAL_END),
+        "test_start": str(VAL_END + timedelta(days=1)),
+        "test_end": str(DATA_END),
     }
 
 
-def data_params() -> dict[str, str]:
-    """Versión de datos: hash del manifiesto completo y del Parquet unificado."""
+def data_params():
+    """Hash del manifiesto y del parquet de viajes para saber con que datos se entreno."""
     if not MANIFEST_PATH.exists():
         return {"data_manifest_sha256": "sin_manifiesto", "data_parquet_sha256": "sin_manifiesto"}
-    raw = MANIFEST_PATH.read_bytes()
-    manifest = json.loads(raw)
+
+    contenido = MANIFEST_PATH.read_bytes()
+    manifest = json.loads(contenido)
     return {
-        "data_manifest_sha256": hashlib.sha256(raw).hexdigest(),
+        "data_manifest_sha256": hashlib.sha256(contenido).hexdigest(),
         "data_parquet_sha256": manifest["unified_parquet"]["sha256"],
     }
 
 
-def run_tags(pregunta: str) -> dict[str, str]:
-    """Tags obligatorios de la convención del README."""
+def run_tags(pregunta):
     return {"equipo": "01", "pregunta": pregunta, "commit": git_commit()}

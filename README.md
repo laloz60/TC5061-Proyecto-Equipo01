@@ -83,16 +83,13 @@ mlflow ui                             # UI en http://127.0.0.1:5000
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
-- Params y tags de trazabilidad (rango de fechas desde `config.py`, hashes desde `data/manifest.json`, commit dinámico) se generan en `mibici/modeling/tracking.py`.
 
-P1 (regresión, requiere `python -m mibici.features`):
+Entrenar P1 (antes correr `python -m mibici.features`):
 
 ```bash
-python -m mibici.modeling.train p1 --model ridge   # P1-baseline-ridge   (~20 s)
-python -m mibici.modeling.train p1 --model rf      # P1-candidato-rf     (~30 s, 12 núcleos)
+python -m mibici.modeling.train p1 --model ridge
+python -m mibici.modeling.train p1 --model rf
 ```
-
-Cada run registra en val y test las métricas del modelo (`test_mae`, `test_rmse`, `test_r2`) y las del baseline de 4 semanas (`baseline_test_mae`, …), el modelo serializado y la gráfica predicción vs real / residuos.
 
 ## Estructura del proyecto
 

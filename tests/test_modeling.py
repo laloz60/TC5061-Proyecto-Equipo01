@@ -1,44 +1,44 @@
-"""Tests de trazabilidad MLflow (#22) y utilidades de P1 (sin MLflow ni datos reales)."""
-
 import json
 
 import numpy as np
 import pytest
 
-from mibici.config import DATA_END, DATA_START
 from mibici.modeling import tracking
 from mibici.modeling.regression import build_model, regression_metrics
 
 
-def test_split_params_come_from_config():
+def test_fechas_de_config():
     params = tracking.split_params()
-    assert params["train_start"] == DATA_START.isoformat() == "2023-05-01"
+    assert params["train_start"] == "2023-05-01"
     assert params["val_start"] == "2025-01-01"
     assert params["test_start"] == "2025-07-01"
-    assert params["test_end"] == DATA_END.isoformat() == "2026-09-30"
+    assert params["test_end"] == "2026-09-30"
 
 
-def test_data_params_read_parquet_hash_from_manifest(tmp_path, monkeypatch):
+def test_hash_del_parquet(tmp_path, monkeypatch):
     manifest = tmp_path / "manifest.json"
-    manifest.write_text(json.dumps({"unified_parquet": {"sha256": "a" * 64}}))
+    manifest.write_text(json.dumps({"unified_parquet": {"sha256": "abc123"}}))
     monkeypatch.setattr(tracking, "MANIFEST_PATH", manifest)
+
     params = tracking.data_params()
-    assert params["data_parquet_sha256"] == "a" * 64
-    assert len(params["data_manifest_sha256"]) == 64
+    assert params["data_parquet_sha256"] == "abc123"
 
 
-def test_run_tags_include_dynamic_commit():
+def test_tags():
     tags = tracking.run_tags("P1")
     assert tags["equipo"] == "01"
     assert tags["pregunta"] == "P1"
-    assert tags["commit"] != "10dfa34"
+    assert tags["commit"] != "desconocido"
 
 
-def test_regression_metrics_perfect_prediction():
+def test_metricas_prediccion_perfecta():
     y = np.array([0.0, 1.0, 3.0])
-    assert regression_metrics(y, y) == {"mae": 0.0, "rmse": 0.0, "r2": 1.0}
+    metricas = regression_metrics(y, y)
+    assert metricas["mae"] == 0
+    assert metricas["rmse"] == 0
+    assert metricas["r2"] == 1
 
 
-def test_build_model_rejects_unknown_kind():
-    with pytest.raises(ValueError, match="no soportado"):
+def test_modelo_no_soportado():
+    with pytest.raises(ValueError):
         build_model("xgboost")

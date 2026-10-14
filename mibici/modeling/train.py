@@ -230,14 +230,13 @@ def train_p3(
 
 @app.command("p1")
 def train_p1(
-    model: str = typer.Option("ridge", help="Baseline: 'ridge' | Candidato: 'rf'"),
+    model: str = typer.Option("ridge", help="ridge o rf"),
     features_path: Path = typer.Option(FEATURES_PATH, help="Features estación × hora."),
-    rf_max_samples: int = typer.Option(500_000, help="Filas por árbol del RandomForest."),
 ):
-    """Comando CLI para entrenar P1 (Regresión) y compararlo con el baseline de 4 semanas."""
-    from mibici.modeling.regression import train_p1 as run_p1
+    """Entrena P1 (Regresión)."""
+    from mibici.modeling.regression import train_p1 as entrenar_p1
 
-    run_p1(features_path, kind=model, rf_max_samples=rf_max_samples)
+    entrenar_p1(features_path, kind=model)
 
 
 @app.command("p2")
