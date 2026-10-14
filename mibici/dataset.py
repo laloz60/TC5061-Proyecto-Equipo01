@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
+import re
 import time
 
 from loguru import logger
@@ -315,6 +316,36 @@ def download_all(entries: list[MonthFile], workers: int = 6) -> None:
     logger.info(f"Descarga completa: {len(entries)} meses + nomenclatura")
 
 
+# Formatos de fecha observados en los CSV 2023-05..2026-09. La mayoría usa ISO
+# ("2024-01-01 00:05:25"), pero 2023-11, 2024-09 y 2024-10 vienen como
+# "01/11/2023 0:01" (día/mes). Dejar que pandas infiera el formato los lee
+# como mes/día: invierte día y mes cuando el día es <= 12 y produce NaT en
+# el resto (~721k viajes perdidos). Por eso el formato se fija por archivo.
+_DAYFIRST_PATTERN = r"^\d{1,2}/\d{1,2}/\d{4}"
+_DAYFIRST_FORMAT = "%d/%m/%Y %H:%M"
+
+
+def parse_trip_datetime(values: pd.Series) -> pd.Series:
+    """Convierte una columna de fecha/hora cruda a datetime con formato explícito.
+
+    Detecta el formato con la primera fecha no nula del archivo (cada CSV
+    mensual usa un solo formato) y falla si alguna fecha no nula no se puede
+    convertir, en lugar de convertirla en NaT en silencio.
+    """
+    text = values.astype("string").str.strip().str.strip('"').replace("", pd.NA)
+    sample = text.dropna()
+    if sample.empty:
+        return pd.to_datetime(text)
+    fmt = _DAYFIRST_FORMAT if re.match(_DAYFIRST_PATTERN, sample.iloc[0]) else "ISO8601"
+    parsed = pd.to_datetime(text, format=fmt, errors="coerce")
+
+    failed = parsed.isna() & text.notna()
+    if failed.any():
+        examples = text[failed].unique()[:3].tolist()
+        raise ValueError(f"{failed.sum():,} fechas con formato no reconocido, p. ej. {examples}")
+    return parsed
+
+
 def read_csv_normalized(path: Path) -> pd.DataFrame:
     """Lee un CSV mensual y lo deja con el esquema canónico del proyecto.
 
@@ -343,8 +374,8 @@ def read_csv_normalized(path: Path) -> pd.DataFrame:
     df["usuario_id"] = pd.to_numeric(df["usuario_id"], errors="coerce").astype("Int64")
     df["genero"] = df["genero"].astype("string").str.strip().str.upper()
     df["anio_nacimiento"] = pd.to_numeric(df["anio_nacimiento"], errors="coerce").astype("Int16")
-    df["inicio_viaje"] = pd.to_datetime(df["inicio_viaje"], errors="coerce")
-    df["fin_viaje"] = pd.to_datetime(df["fin_viaje"], errors="coerce")
+    df["inicio_viaje"] = parse_trip_datetime(df["inicio_viaje"])
+    df["fin_viaje"] = parse_trip_datetime(df["fin_viaje"])
     df["origen_id"] = pd.to_numeric(df["origen_id"], errors="coerce").astype("Int32")
     df["destino_id"] = pd.to_numeric(df["destino_id"], errors="coerce").astype("Int32")
 
