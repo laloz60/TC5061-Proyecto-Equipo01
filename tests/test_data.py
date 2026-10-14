@@ -9,7 +9,13 @@ from typer.testing import CliRunner
 
 from mibici import dataset as ds
 from mibici.config import DATA_END, DATA_START, MANIFEST_PATH, UNIFIED_TRIPS_PATH
-from mibici.dataset import app, catalog, normalize_columns, read_csv_normalized
+from mibici.dataset import (
+    app,
+    catalog,
+    normalize_columns,
+    parse_trip_datetime,
+    read_csv_normalized,
+)
 
 runner = CliRunner()
 
@@ -147,3 +153,24 @@ def test_cli_force_skips_confirmation_and_runs(tmp_path, monkeypatch):
     result = runner.invoke(app, ["--force"])
 
     assert result.exit_code == 0, result.output
+
+
+def test_fechas_dia_mes():
+    fechas = pd.Series(["01/11/2023 0:01", "16/11/2023 9:57", None])
+    resultado = parse_trip_datetime(fechas)
+    assert resultado[0] == pd.Timestamp("2023-11-01 00:01")
+    assert resultado[1] == pd.Timestamp("2023-11-16 09:57")
+    assert pd.isna(resultado[2])
+
+
+def test_fechas_iso():
+    fechas = pd.Series(["2024-01-01 00:05:25", "2024-01-13 18:00:00"])
+    resultado = parse_trip_datetime(fechas)
+    assert resultado[0] == pd.Timestamp("2024-01-01 00:05:25")
+    assert resultado[1] == pd.Timestamp("2024-01-13 18:00:00")
+
+
+def test_fechas_formato_desconocido():
+    fechas = pd.Series(["2024-01-01 00:05:25", "ayer a las 5"])
+    with pytest.raises(ValueError):
+        parse_trip_datetime(fechas)

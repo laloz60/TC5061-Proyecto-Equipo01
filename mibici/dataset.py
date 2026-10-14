@@ -315,6 +315,27 @@ def download_all(entries: list[MonthFile], workers: int = 6) -> None:
     logger.info(f"Descarga completa: {len(entries)} meses + nomenclatura")
 
 
+def parse_trip_datetime(values: pd.Series) -> pd.Series:
+    """Convierte las fechas de un CSV mensual a datetime."""
+    # 2023-11, 2024-09 y 2024-10 vienen como dd/mm/yyyy, los demas meses en ISO
+    text = values.astype("string").str.strip()
+    text = text.replace("", pd.NA)
+
+    first = text.dropna()
+    if len(first) == 0:
+        return pd.to_datetime(text)
+
+    if "/" in first.iloc[0]:
+        parsed = pd.to_datetime(text, format="%d/%m/%Y %H:%M", errors="coerce")
+    else:
+        parsed = pd.to_datetime(text, format="ISO8601", errors="coerce")
+
+    bad = parsed.isna() & text.notna()
+    if bad.sum() > 0:
+        raise ValueError(f"Hay {bad.sum()} fechas con formato desconocido")
+    return parsed
+
+
 def read_csv_normalized(path: Path) -> pd.DataFrame:
     """Lee un CSV mensual y lo deja con el esquema canónico del proyecto.
 
@@ -343,8 +364,8 @@ def read_csv_normalized(path: Path) -> pd.DataFrame:
     df["usuario_id"] = pd.to_numeric(df["usuario_id"], errors="coerce").astype("Int64")
     df["genero"] = df["genero"].astype("string").str.strip().str.upper()
     df["anio_nacimiento"] = pd.to_numeric(df["anio_nacimiento"], errors="coerce").astype("Int16")
-    df["inicio_viaje"] = pd.to_datetime(df["inicio_viaje"], errors="coerce")
-    df["fin_viaje"] = pd.to_datetime(df["fin_viaje"], errors="coerce")
+    df["inicio_viaje"] = parse_trip_datetime(df["inicio_viaje"])
+    df["fin_viaje"] = parse_trip_datetime(df["fin_viaje"])
     df["origen_id"] = pd.to_numeric(df["origen_id"], errors="coerce").astype("Int32")
     df["destino_id"] = pd.to_numeric(df["destino_id"], errors="coerce").astype("Int32")
 

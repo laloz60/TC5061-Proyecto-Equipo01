@@ -1,7 +1,7 @@
 {
   "dataset": "mibici_viajes",
   "source_url": "https://mibici.net/es/datos-abiertos",
-  "generated_at": "2026-10-12T22:54:54.466344+00:00",
+  "generated_at": "2026-10-14T22:03:47.310512+00:00",
   "n_months": 41,
   "first_month": "2023-05",
   "last_month": "2026-09",
@@ -9,8 +9,8 @@
   "n_stations": 484,
   "unified_parquet": {
     "path": "data/raw/mibici_viajes_2023_05_a_2026_09.parquet",
-    "size_bytes": 336473482,
-    "sha256": "69e006f3f63ffb25ad8e6113e0ec3ff602559bb6136dc2c79c9cb18de8ed19bc",
+    "size_bytes": 338958651,
+    "sha256": "fbb830d06a019f81698727c9bc898c5859f1388e41983f89b33905cde3a8ff94",
     "rows": 15376127
   },
   "nomenclatura": {
