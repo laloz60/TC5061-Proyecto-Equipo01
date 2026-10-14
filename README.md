@@ -122,7 +122,9 @@ mlflow ui                             # UI en http://127.0.0.1:5000
 
 ## Flujo de trabajo Git
 
-- **`main` está protegida**: no se hace push directo; todo cambio entra por **Pull Request** con **1 aprobación** mínima.
+- **VoBo obligatorio**: todo cambio —directo o por rama— necesita la aprobación de **al menos un compañero** (aprobación del PR o comentario `LGTM`).
+- **Rama + PR**: cambios sobre código que ya existe (modificar, refactorizar, corregir).
+- **Push directo a `main`**: solo cuando el cambio es completamente nuevo (archivos que aún no existen). *Nota: `main` tiene activo "Require pull request before merging", así que GitHub rechaza el push directo para quien no es admin; en ese caso se abre un PR y se pide el VoBo igual.*
 - **Ramas:** `feature/<nombre-corto>` o `fix/<issue>`.
 - **Commits:** [Conventional Commits](https://www.conventionalcommits.org/) — `feat:`, `docs:`, `test:`, `chore:`, `fix:`.
 - **Requisito de rúbrica:** cada integrante abre **al menos 1 PR** y reviewa **al menos 1 PR** de otro integrante.
