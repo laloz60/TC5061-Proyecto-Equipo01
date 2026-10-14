@@ -29,6 +29,7 @@ from mibici.config import (
     NOMENCLATURA_PARQUET_PATH,
     SEED,
 )
+from mibici.features import FEATURES_PATH
 
 # Inicialización de la aplicación CLI
 app = typer.Typer(help="CLI modular para el entrenamiento de modelos de Machine Learning - MiBici")
@@ -229,11 +230,13 @@ def train_p3(
 
 @app.command("p1")
 def train_p1(
-    features_path: Path = typer.Option(PROCESSED_DATA_DIR / "features.csv", help="Características P1."),
-    model_path: Path = typer.Option(MODELS_DIR / "model_p1.pkl", help="Modelo P1."),
+    model: str = typer.Option("ridge", help="ridge o rf"),
+    features_path: Path = typer.Option(FEATURES_PATH, help="Features estación × hora."),
 ):
-    """Comando reservado para la Pregunta P1 (Regresión)."""
-    logger.info("Comando P1 (Regresión) pendiente de implementación modular por el equipo.")
+    """Entrena P1 (Regresión)."""
+    from mibici.modeling.regression import train_p1 as entrenar_p1
+
+    entrenar_p1(features_path, kind=model)
 
 
 @app.command("p2")
