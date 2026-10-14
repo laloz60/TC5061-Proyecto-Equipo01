@@ -83,13 +83,7 @@ mlflow ui                             # UI en http://127.0.0.1:5000
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
-
-Entrenar P1 (antes correr `python -m mibici.features`):
-
-```bash
-python -m mibici.modeling.train p1 --model ridge
-python -m mibici.modeling.train p1 --model rf
-```
+- El entrenamiento se vuelve con `python -m mibici.modeling.train` (en desarrollo).
 
 ## Estructura del proyecto
 
