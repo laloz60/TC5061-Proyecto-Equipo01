@@ -21,7 +21,6 @@ from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
-import re
 import time
 
 from loguru import logger
@@ -316,33 +315,24 @@ def download_all(entries: list[MonthFile], workers: int = 6) -> None:
     logger.info(f"Descarga completa: {len(entries)} meses + nomenclatura")
 
 
-# Formatos de fecha observados en los CSV 2023-05..2026-09. La mayoría usa ISO
-# ("2024-01-01 00:05:25"), pero 2023-11, 2024-09 y 2024-10 vienen como
-# "01/11/2023 0:01" (día/mes). Dejar que pandas infiera el formato los lee
-# como mes/día: invierte día y mes cuando el día es <= 12 y produce NaT en
-# el resto (~721k viajes perdidos). Por eso el formato se fija por archivo.
-_DAYFIRST_PATTERN = r"^\d{1,2}/\d{1,2}/\d{4}"
-_DAYFIRST_FORMAT = "%d/%m/%Y %H:%M"
-
-
 def parse_trip_datetime(values: pd.Series) -> pd.Series:
-    """Convierte una columna de fecha/hora cruda a datetime con formato explícito.
+    """Convierte las fechas de un CSV mensual a datetime."""
+    # 2023-11, 2024-09 y 2024-10 vienen como dd/mm/yyyy, los demas meses en ISO
+    text = values.astype("string").str.strip()
+    text = text.replace("", pd.NA)
 
-    Detecta el formato con la primera fecha no nula del archivo (cada CSV
-    mensual usa un solo formato) y falla si alguna fecha no nula no se puede
-    convertir, en lugar de convertirla en NaT en silencio.
-    """
-    text = values.astype("string").str.strip().str.strip('"').replace("", pd.NA)
-    sample = text.dropna()
-    if sample.empty:
+    first = text.dropna()
+    if len(first) == 0:
         return pd.to_datetime(text)
-    fmt = _DAYFIRST_FORMAT if re.match(_DAYFIRST_PATTERN, sample.iloc[0]) else "ISO8601"
-    parsed = pd.to_datetime(text, format=fmt, errors="coerce")
 
-    failed = parsed.isna() & text.notna()
-    if failed.any():
-        examples = text[failed].unique()[:3].tolist()
-        raise ValueError(f"{failed.sum():,} fechas con formato no reconocido, p. ej. {examples}")
+    if "/" in first.iloc[0]:
+        parsed = pd.to_datetime(text, format="%d/%m/%Y %H:%M", errors="coerce")
+    else:
+        parsed = pd.to_datetime(text, format="ISO8601", errors="coerce")
+
+    bad = parsed.isna() & text.notna()
+    if bad.sum() > 0:
+        raise ValueError(f"Hay {bad.sum()} fechas con formato desconocido")
     return parsed
 
 

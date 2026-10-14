@@ -155,22 +155,22 @@ def test_cli_force_skips_confirmation_and_runs(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
 
 
-def test_parse_trip_datetime_dayfirst_format():
-    """2023-11, 2024-09 y 2024-10 vienen como dd/mm/yyyy H:MM; no se deben invertir."""
-    parsed = parse_trip_datetime(pd.Series(["01/11/2023 0:01", "16/11/2023 9:57", None]))
-    assert parsed.iloc[0] == pd.Timestamp("2023-11-01 00:01")
-    assert parsed.iloc[1] == pd.Timestamp("2023-11-16 09:57")
-    assert pd.isna(parsed.iloc[2])
+def test_fechas_dia_mes():
+    fechas = pd.Series(["01/11/2023 0:01", "16/11/2023 9:57", None])
+    resultado = parse_trip_datetime(fechas)
+    assert resultado[0] == pd.Timestamp("2023-11-01 00:01")
+    assert resultado[1] == pd.Timestamp("2023-11-16 09:57")
+    assert pd.isna(resultado[2])
 
 
-def test_parse_trip_datetime_iso_format():
-    parsed = parse_trip_datetime(pd.Series(["2024-01-01 00:05:25", "2024-01-13 18:00:00"]))
-    assert parsed.tolist() == [
-        pd.Timestamp("2024-01-01 00:05:25"),
-        pd.Timestamp("2024-01-13 18:00"),
-    ]
+def test_fechas_iso():
+    fechas = pd.Series(["2024-01-01 00:05:25", "2024-01-13 18:00:00"])
+    resultado = parse_trip_datetime(fechas)
+    assert resultado[0] == pd.Timestamp("2024-01-01 00:05:25")
+    assert resultado[1] == pd.Timestamp("2024-01-13 18:00:00")
 
 
-def test_parse_trip_datetime_fails_on_unknown_format():
-    with pytest.raises(ValueError, match="formato no reconocido"):
-        parse_trip_datetime(pd.Series(["2024-01-01 00:05:25", "ayer a las 5"]))
+def test_fechas_formato_desconocido():
+    fechas = pd.Series(["2024-01-01 00:05:25", "ayer a las 5"])
+    with pytest.raises(ValueError):
+        parse_trip_datetime(fechas)
