@@ -64,8 +64,16 @@ data/manifest.json                                 # versionado: totales + SHA-2
 Verificación de que tus datos son idénticos a los del equipo:
 
 ```bash
-pytest            # 8 pruebas de ingesta y manifiesto
+pytest            # pruebas de ingesta, manifiesto y features
 ```
+
+## Features (P1 y P2)
+
+```bash
+python -m mibici.features   # ~10 s, ~6 GB de RAM
+```
+
+Genera `data/processed/features_estacion_hora.parquet` (no versionado): una fila por estación × hora (10.9M filas, 473 estaciones) con los targets `salidas`/`llegadas`, el saldo `neto`, variables de calendario, lags de 1h/24h/168h, el promedio móvil de 7 días, el promedio de la misma hora en las 4 semanas previas (baseline de P1), la capacidad y las coordenadas de la estación, y la columna `split` (train/val/test). Todas las features de la hora h usan solo horas anteriores (sin fuga temporal); el detalle está en el docstring de `mibici/features.py`.
 
 ## Experimentos (MLflow)
 
