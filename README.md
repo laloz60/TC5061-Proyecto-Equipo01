@@ -83,7 +83,12 @@ mlflow ui                             # UI en http://127.0.0.1:5000
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
-- El entrenamiento se vuelve con `python -m mibici.modeling.train` (en desarrollo).
+- El entrenamiento se vuelve con `python -m mibici.modeling.train ` (FALTAN P1 Y P2).
+- **Comandos de entrenamiento y ejecución (P3 - Clustering):**
+  - Entrenar modelo **Baseline** (K-Means con inicialización aleatoria):
+    ```bash
+    python mibici/modeling/train.py p3
+    ```
 
 ## Buenas prácticas
 

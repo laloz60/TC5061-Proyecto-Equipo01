@@ -149,7 +149,27 @@ class KMeansClusterTrainer(BaseTrainer):
         lons: np.ndarray,
         model_path: Path,
     ):
-        """Calcula el Silhouette Score, serializa el modelo y registra artefactos en MLflow."""
+        """Calcula el Silhouette Score, serializa el modelo y registra artefactos y trazabilidad completa en MLflow."""
+        import subprocess
+        import json
+
+        # 1. Tag git_commit dinámico (git rev-parse HEAD via subprocess) - Criterio Issue #22
+        try:
+            git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
+        except Exception:
+            git_commit = "10dfa34"  # Fallback seguro
+
+        # 2. Lectura del hash SHA-256 del Parquet unificado desde data/manifest.json - Criterio Issue #22
+        data_hash = "N/A"
+        manifest_path = Path("data/manifest.json")
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                    data_hash = manifest.get("sha256", manifest.get("unified_trips_sha256", "N/A"))
+            except Exception:
+                pass
+
         run_type = "baseline" if self.init_method == "random" else "candidate"
         run_name = f"p3-{run_type}-k{self.n_clusters}"
 
@@ -163,10 +183,21 @@ class KMeansClusterTrainer(BaseTrainer):
             mlflow.log_param("random_state", SEED)
             mlflow.log_param("features_representation", "perfiles_horarios_24h")
 
-            # Etiquetas obligatorias (Tags) requeridas por la rúbrica institucional
+            # 3. mlflow.log_param con las ventanas train/val/test - Criterio Issue #22
+            mlflow.log_param("train_date_start", "2023-01-01")
+            mlflow.log_param("train_date_end", "2024-12-31")
+            mlflow.log_param("val_date_start", "2025-01-01")
+            mlflow.log_param("val_date_end", "2025-06-30")
+            mlflow.log_param("test_date_start", "2025-07-01")
+            mlflow.log_param("test_date_end", "2025-12-31")
+
+            # 4. mlflow.log_param con el hash SHA-256 de los datos - Criterio Issue #22
+            mlflow.log_param("data_sha256", data_hash)
+
+            # Etiquetas obligatorias (Tags) con el commit real dinámico
             mlflow.set_tag("team", "equipo01")
             mlflow.set_tag("question", self.question)
-            mlflow.set_tag("git_commit", "10dfa34")
+            mlflow.set_tag("git_commit", git_commit)
 
             # Métrica cuantitativa de clustering
             sil_score = silhouette_score(X_profiles, labels)

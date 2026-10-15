@@ -2,10 +2,25 @@
 Total de estaciones evaluadas: 484
 
 --- Distribución de Estaciones por Clúster ---
-Clúster 0: 117 estaciones (24.17%)
-Clúster 1: 163 estaciones (33.68%)
-Clúster 2: 120 estaciones (24.79%)
-Clúster 3: 71 estaciones (14.67%)
+Clúster 0: 10 estaciones (2.07%)
+Clúster 1: 36 estaciones (7.44%)
+Clúster 2: 19 estaciones (3.93%)
+Clúster 3: 29 estaciones (5.99%)
 Clúster 4: 13 estaciones (2.69%)
+Clúster 5: 37 estaciones (7.64%)
+Clúster 6: 31 estaciones (6.40%)
+Clúster 7: 2 estaciones (0.41%)
+Clúster 8: 15 estaciones (3.10%)
+Clúster 9: 12 estaciones (2.48%)
+Clúster 10: 21 estaciones (4.34%)
+Clúster 11: 29 estaciones (5.99%)
+Clúster 12: 24 estaciones (4.96%)
+Clúster 13: 50 estaciones (10.33%)
+Clúster 14: 25 estaciones (5.17%)
+Clúster 15: 53 estaciones (10.95%)
+Clúster 16: 2 estaciones (0.41%)
+Clúster 17: 32 estaciones (6.61%)
+Clúster 18: 19 estaciones (3.93%)
+Clúster 19: 25 estaciones (5.17%)
 
-Silhouette Score en Inferencia: 0.1600
+Silhouette Score en Inferencia: 0.1052
