@@ -4,6 +4,7 @@ import pandas as pd
 from mibici.features import (
     add_calendar_features,
     add_history_features,
+    add_risk_label,
     add_station_features,
     aggregate_station_hour,
     assign_split,
@@ -147,3 +148,28 @@ def test_split():
     )
     df = assign_split(df)
     assert df["split"].tolist() == ["train", "val", "val", "test"]
+
+def test_etiqueta_de_riesgo():
+    df = crear_horas([0, 6, 3, 0, 0])
+    df["llegadas"] = [0, 0, 0, 9, 1]
+    df["capacidad"] = 10.0
+    df = add_risk_label(df, horizon=2, alpha=0.5)
+
+    # neto = [0, 6, 3, -9, -1]; neto_fut suma las 2 horas siguientes
+    assert df["neto_fut"].tolist()[:3] == [9, -6, -10]
+    assert df["neto_fut"].iloc[3:].isna().all()
+    assert df["riesgo_vaciado"].tolist()[:3] == [1, 0, 0]
+    assert df["riesgo_saturacion"].tolist()[:3] == [0, 1, 1]
+    assert df["riesgo"].tolist()[:3] == [1, 1, 1]
+    assert df["riesgo"].iloc[3:].isna().all()
+
+
+def test_riesgo_no_mezcla_estaciones_ni_usa_estaciones_sin_capacidad():
+    df = pd.concat([crear_horas([0, 0, 0], 1), crear_horas([9, 9, 9], 2)]).reset_index(drop=True)
+    df["capacidad"] = [10.0, 10.0, 10.0, np.nan, np.nan, np.nan]
+    df = add_risk_label(df, horizon=1, alpha=0.5)
+
+    # la ultima hora de la estacion 1 no debe tomar las salidas de la estacion 2
+    assert pd.isna(df.loc[2, "riesgo"])
+    assert df.loc[[0, 1], "riesgo"].tolist() == [0, 0]
+    assert df.loc[3:, "riesgo"].isna().all()
