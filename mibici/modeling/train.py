@@ -36,6 +36,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix, f1_score, precision_score, recall_score
 import seaborn as sns
+from sklearn.dummy import DummyClassifier
 
 # Inicialización de la aplicación CLI
 app = typer.Typer(help="CLI modular para el entrenamiento de modelos de Machine Learning - MiBici")
@@ -241,67 +242,121 @@ def train_p1(
     """Comando reservado para la Pregunta P1 (Regresión)."""
     logger.info("Comando P1 (Regresión) pendiente de implementación modular por el equipo.")
 
+def add_risk_label(df): # Para P2
+    """Agrega la columna 'riesgo'"""
+    if 'viajes_salida_hora' in df.columns:
+        df['riesgo'] = (df['viajes_salida_hora'] > 10).astype(int)
+    else:
+        if 'riesgo' not in df.columns:
+            df['riesgo'] = 0
+            
+    y = df['riesgo']
+    return df, y
 
 @app.command("p2")
 def train_p2(
-    features_path: Path = typer.Option(PROCESSED_DATA_DIR / "features.csv", help="Características P2."),
-    model_path: Path = typer.Option(MODELS_DIR / "model_p2.pkl", help="Modelo P2."),
-):
+    model_name: str = typer.Option("dummy", help="Modelo a entrenar: 'dummy' (baseline) o 'logreg' (candidato)."),
+    features_path: Path = typer.Option(PROCESSED_DATA_DIR / "features_estacion_hora.parquet", help="Características P2."),
+    model_path: Path = typer.Option(MODELS_DIR / "model_p2.pkl", help="Modelo P2."),):
+    
     """Clasificación (P2)"""
-    logger.info("Iniciando P2")
+    logger.info("Iniciando P2 con modelo - {model_name}")
+    mlflow.set_experiment(EXPERIMENT_NAME) # NOMBRE DEL EXPERIMENTO
+
+    run_name = f"P2-baseline-{model_name}"
+
+    with mlflow.start_run(run_name=run_name) as run: # Obtenemos commit
+        import subprocess
+        try:
+            git_commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).strip().decode("utf-8")
+        except Exception:
+            git_commit = "unknown"
     
-    mlflow.set_experiment(EXPERIMENT_NAME)
-    
-    with mlflow.start_run(run_name="P2-baseline-logreg") as run:
+    with mlflow.start_run(run_name=run_name) as run:
         mlflow.set_tag("equipo", "01")
         mlflow.set_tag("pregunta", "P2")
-        mlflow.set_tag("git_commit", "de3a02d")
+        mlflow.set_tag("git_commit", git_commit)
+                
+        from mibici.config import UNIFIED_TRIPS_PATH
         
-        logger.warning("Usando datos estructurados para el baseline de P2.")
-        np.random.seed(42)
-        n_samples = 1000
-        X = pd.DataFrame({
-            'capacidad_estacion': np.random.randint(10, 40, size=n_samples),
-            'viajes_salida_hora': np.random.randint(2, 20, size=n_samples),
-            'viajes_llegada_hora': np.random.randint(2, 20, size=n_samples)})
-        
-        base_rule = (X['viajes_salida_hora'] > 10).astype(int)
-        noise = np.random.choice([0, 1], size=n_samples, p=[0.85, 0.15])
-        y = np.bitwise_xor(base_rule, noise)
-        
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        logger.info("Entrenando RL")
-        model = LogisticRegression(random_state=42)
+        logger.info("Cargando datos para P2")
+        if UNIFIED_TRIPS_PATH.exists():
+            df_trips = pd.read_parquet(UNIFIED_TRIPS_PATH, columns=["inicio_viaje", "origen_id"])
+            df_trips["hora"] = pd.to_datetime(df_trips["inicio_viaje"]).dt.hour
+            df = df_trips.groupby(["origen_id", "hora"]).size().reset_index(name="viajes_salida_hora")
+            df["capacidad_estacion"] = 20
+        else:
+            logger.warning(f"No se encontró el archivo en {UNIFIED_TRIPS_PATH}. Usando datos sintéticos de respaldo para pruebas.")
+            # Creamos un DataFrame sintético rápido para que el pipeline no se detenga
+            np.random.seed(SEED)
+            n_samples = 1000
+            df = pd.DataFrame({
+                "origen_id": np.random.randint(1, 100, n_samples),
+                "hora": np.random.randint(0, 24, n_samples),
+                "viajes_salida_hora": np.random.randint(0, 25, n_samples),
+                "capacidad_estacion": 20
+            })
+
+        # Aplicamos la etiqueta de riesgo institucional
+        df, y = add_risk_label(df)
+        X = df.drop(columns=["riesgo", "origen_id"], errors="ignore")
+        logger.success("Datos de P2 listos para el entrenamiento.")
+    
+        # Test 20% Train 80%
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=SEED)
+
+        # De acuerdo al modelo seleccionado 
+        if model_name == "dummy":
+            logger.info("Configurando Modelo DummyClassifier")
+            model = DummyClassifier(strategy="most_frequent")
+        elif model_name == "logreg":
+            logger.info("Configurando Modelo LogisticRegression")
+            model = LogisticRegression(class_weight="balanced", random_state=SEED, max_iter=1000)
+        else:
+            raise ValueError(f"Modelo no OK {model_name}. Usar 'dummy' o 'logreg'.")
+
+        # Entrenando
+        logger.info("Entrenando modelo")
         model.fit(X_train, y_train)
-        
+
+        # Predicciones
         y_pred = model.predict(X_test)
-        y_prob = model.predict_proba(X_test)[:, 1]
-        
+        if hasattr(model, "predict_proba"):
+            y_prob = model.predict_proba(X_test)[:, 1]
+            roc = roc_auc_score(y_test, y_prob)
+        else:
+            roc = 0.0
+
         precision = precision_score(y_test, y_pred, zero_division=0)
         recall = recall_score(y_test, y_pred, zero_division=0)
-        f1 = f1_score(y_test, y_pred, zero_division=0)
-        roc_auc = roc_auc_score(y_test, y_prob)
+        f1_macro = f1_score(y_test, y_pred, average="macro", zero_division=0)
+        #ROC en la parte de arriba
         
-        logger.success(f"Métricas P2 -> Precision: {precision:.2f} | Recall: {recall:.2f} | F1: {f1:.2f} | ROC-AUC: {roc_auc:.2f}")
-        
-        mlflow.log_param("modelo", "LogisticRegression")
+        logger.success(f"Métricas P2 -> Precision: {precision:.2f} | Recall: {recall:.2f} | F1: {f1_macro:.2f} | ROC-AUC: {roc:.2f}")
+
+        #Configuración de MlFlow
+        mlflow.log_param("modelo", model_name)
         mlflow.log_param("test_size", 0.2)
-        mlflow.log_param("random_state", 42)
+        mlflow.log_param("random_state", SEED)
         
         mlflow.log_metric("test_precision", precision)
         mlflow.log_metric("test_recall", recall)
-        mlflow.log_metric("test_f1", f1)
-        mlflow.log_metric("test_roc_auc", roc_auc)
-        
+        mlflow.log_metric("test_f1_macro", f1_macro)
+        mlflow.log_metric("test_roc_auc", roc)
+
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        joblib.dump(model, model_path)
+        mlflow.log_artifact(str(model_path), artifact_path="modelo serializado")
+
+        # Artefacto
         FIGURES_DIR.mkdir(parents=True, exist_ok=True)
         plt.figure(figsize=(6, 6))
         sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
-        plt.title("Matriz de Confusión - P2 Baseline")
+        plt.title(f"Matriz de Confusión - P2 ({model_name.upper()})")
         plt.xlabel("Predicción del Riesgo")
         plt.ylabel("Riesgo Real")
         
-        artifact_path = FIGURES_DIR / "matriz_confusion_p2.png"
+        artifact_path = FIGURES_DIR / f"matriz_confusion_p2_{model_name}.png"
         plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
         mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
         plt.close()
