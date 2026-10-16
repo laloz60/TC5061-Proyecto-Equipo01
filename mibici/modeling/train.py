@@ -263,14 +263,14 @@ def train_p2(
     logger.info(f"Iniciando P2 con modelo - {model_name}")
     mlflow.set_experiment(EXPERIMENT_NAME) # NOMBRE DEL EXPERIMENTO
 
-    run_name = f"P2-baseline-{model_name}"
+    run_name = "P2-baseline-dummy" if model_name == "dummy" else "P2-candidato-logreg"
 
-    with mlflow.start_run(run_name=run_name) as run: # Obtenemos commit
-        import subprocess
-        try:
-            git_commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).strip().decode("utf-8")
-        except Exception:
-            git_commit = "unknown"
+    # Obtenemos commit
+    import subprocess
+    try:
+        git_commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).strip().decode("utf-8")
+    except Exception:
+        git_commit = "unknown"
     
     with mlflow.start_run(run_name=run_name) as run:
         mlflow.set_tag("equipo", "01")
