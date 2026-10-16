@@ -11,31 +11,36 @@ Incluye soporte modular para atender las request de :
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from loguru import logger
-from tqdm import tqdm
-import typer
-import mlflow
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
+
 import joblib
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
-
-from mibici.config import (
-    PROCESSED_DATA_DIR,
-    MODELS_DIR,
-    FIGURES_DIR,
-    NOMENCLATURA_PARQUET_PATH,
-    SEED,
-)
-
+from loguru import logger
+import matplotlib.pyplot as plt
 import mlflow
 import mlflow.sklearn
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix, f1_score, precision_score, recall_score
+import numpy as np
+import pandas as pd
 import seaborn as sns
+from sklearn.cluster import KMeans
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+    silhouette_score,
+)
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm
+import typer
+
+from mibici.config import (
+    FIGURES_DIR,
+    MODELS_DIR,
+    NOMENCLATURA_PARQUET_PATH,
+    PROCESSED_DATA_DIR,
+    SEED,
+)
 
 # Inicialización de la aplicación CLI
 app = typer.Typer(help="CLI modular para el entrenamiento de modelos de Machine Learning - MiBici")
@@ -60,17 +65,14 @@ class BaseTrainer(ABC):
     @abstractmethod
     def load_data(self, *args, **kwargs):
         """Método abstracto para la carga y validación de datos de entrada."""
-        pass
 
     @abstractmethod
     def train_model(self, *args, **kwargs):
         """Método abstracto para el ajuste del algoritmo de Machine Learning."""
-        pass
 
     @abstractmethod
     def evaluate_and_log(self, *args, **kwargs):
         """Método abstracto para evaluación de métricas y registro en MLflow."""
-        pass
 
 
 class KMeansClusterTrainer(BaseTrainer):
@@ -191,7 +193,7 @@ class KMeansClusterTrainer(BaseTrainer):
 
             # Generación de Artefacto Visual (Mapa de Clústeres)
             FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-            fig, ax = plt.subplots(figsize=(8, 6))
+            _fig, ax = plt.subplots(figsize=(8, 6))
             scatter = ax.scatter(lons, lats, c=labels, cmap="viridis", s=50, alpha=0.8)
             ax.set_title(f"Clustering de Estaciones MiBici - P3 ({run_type.upper()} K={self.n_clusters})")
             ax.set_xlabel("Longitud")
@@ -259,7 +261,7 @@ def train_p2(
     
     mlflow.set_experiment(EXPERIMENT_NAME)
     
-    with mlflow.start_run(run_name="P2-baseline-logreg") as run:
+    with mlflow.start_run(run_name="P2-baseline-logreg"):
         mlflow.set_tag("equipo", "01")
         mlflow.set_tag("pregunta", "P2")
         mlflow.set_tag("git_commit", "de3a02d")

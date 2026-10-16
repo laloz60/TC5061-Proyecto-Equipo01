@@ -11,20 +11,21 @@ Incluye soporte modular:
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from loguru import logger
-from tqdm import tqdm
-import typer
+
 import joblib
+from loguru import logger
 import numpy as np
 import pandas as pd
 from sklearn.metrics import silhouette_score
+from tqdm import tqdm
+import typer
 
 from mibici.config import (
-    PROCESSED_DATA_DIR,
     MODELS_DIR,
     NOMENCLATURA_PARQUET_PATH,
-    UNIFIED_TRIPS_PATH,
+    PROCESSED_DATA_DIR,
     SEED,
+    UNIFIED_TRIPS_PATH,
 )
 
 # Inicialización de la aplicación CLI con Typer
@@ -48,12 +49,10 @@ class BasePredictor(ABC):
     @abstractmethod
     def load_model(self, *args, **kwargs):
         """Método abstracto para la carga segura del modelo serializado."""
-        pass
 
     @abstractmethod
     def predict(self, *args, **kwargs):
         """Método abstracto para la ejecución de predicciones."""
-        pass
 
 
 class KMeansClusterPredictor(BasePredictor):
@@ -152,7 +151,7 @@ class KMeansClusterPredictor(BasePredictor):
             X_inf = (profile_counts.div(row_sums, axis=0)).values
             
             sil_infer = silhouette_score(X_inf, cluster_assignments)
-            print(f"\n--- Métrica de Calidad ---")
+            print("\n--- Métrica de Calidad ---")
             print(f" Silhouette Score en Inferencia: {sil_infer:.4f}")
         print("="*50 + "\n")
 
