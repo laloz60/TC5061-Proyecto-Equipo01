@@ -260,7 +260,7 @@ def train_p2(
     model_path: Path = typer.Option(MODELS_DIR / "model_p2.pkl", help="Modelo P2."),):
     
     """Clasificación (P2)"""
-    logger.info("Iniciando P2 con modelo - {model_name}")
+    logger.info(f"Iniciando P2 con modelo - {model_name}")
     mlflow.set_experiment(EXPERIMENT_NAME) # NOMBRE DEL EXPERIMENTO
 
     run_name = f"P2-baseline-{model_name}"
@@ -277,27 +277,23 @@ def train_p2(
         mlflow.set_tag("pregunta", "P2")
         mlflow.set_tag("git_commit", git_commit)
                 
-        from mibici.config import UNIFIED_TRIPS_PATH
-        
-        logger.info("Cargando datos para P2")
-        if UNIFIED_TRIPS_PATH.exists():
-            df_trips = pd.read_parquet(UNIFIED_TRIPS_PATH, columns=["inicio_viaje", "origen_id"])
-            df_trips["hora"] = pd.to_datetime(df_trips["inicio_viaje"]).dt.hour
-            df = df_trips.groupby(["origen_id", "hora"]).size().reset_index(name="viajes_salida_hora")
-            df["capacidad_estacion"] = 20
+        logger.info(f"Cargando características procesadas para P2 desde: {features_path}")
+        if features_path.exists():
+            df = pd.read_parquet(features_path)
+            logger.success(f"Características reales con dimensiones: {df.shape}")
         else:
-            logger.warning(f"No se encontró el archivo en {UNIFIED_TRIPS_PATH}. Usando datos sintéticos de respaldo para pruebas.")
-            # Creamos un DataFrame sintético rápido para que el pipeline no se detenga
-            np.random.seed(SEED)
-            n_samples = 1000
-            df = pd.DataFrame({
-                "origen_id": np.random.randint(1, 100, n_samples),
-                "hora": np.random.randint(0, 24, n_samples),
-                "viajes_salida_hora": np.random.randint(0, 25, n_samples),
-                "capacidad_estacion": 20
-            })
+            logger.error(f"No se encontró el archivo en {features_path}. Asegurate de ejecutar el pipeline")
+            raise FileNotFoundError(f"Falta el archivo {features_path}")
 
-        # Aplicamos la etiqueta de riesgo institucional
+        np.random.seed(SEED)
+        n_samples = 1000
+        df = pd.DataFrame({
+            "origen_id": np.random.randint(1, 100, n_samples),
+            "hora": np.random.randint(0, 24, n_samples),
+            "viajes_salida_hora": np.random.randint(0, 25, n_samples),
+            "capacidad_estacion": 20})
+
+        # Aplicamos la etiqueta de risk
         df, y = add_risk_label(df)
         X = df.drop(columns=["riesgo", "origen_id"], errors="ignore")
         logger.success("Datos de P2 listos para el entrenamiento.")
@@ -330,11 +326,11 @@ def train_p2(
         precision = precision_score(y_test, y_pred, zero_division=0)
         recall = recall_score(y_test, y_pred, zero_division=0)
         f1_macro = f1_score(y_test, y_pred, average="macro", zero_division=0)
-        #ROC en la parte de arriba
+        # ROC en la parte de arriba
         
         logger.success(f"Métricas P2 -> Precision: {precision:.2f} | Recall: {recall:.2f} | F1: {f1_macro:.2f} | ROC-AUC: {roc:.2f}")
 
-        #Configuración de MlFlow
+        # Configuración de MlFlow
         mlflow.log_param("modelo", model_name)
         mlflow.log_param("test_size", 0.2)
         mlflow.log_param("random_state", SEED)
