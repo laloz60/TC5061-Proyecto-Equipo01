@@ -372,14 +372,15 @@ def read_csv_normalized(path: Path) -> pd.DataFrame:
     return df
 
 
-def build_unified_parquet(entries: list[MonthFile]) -> int:
+def build_unified_parquet(entries: list[MonthFile], output: Path = UNIFIED_TRIPS_PATH) -> int:
     """Unifica todos los meses en un solo Parquet, mes a mes (streaming).
 
     Se procesa un mes a la vez con pyarrow.ParquetWriter para no necesitar
     decenas de GB de RAM: el histórico completo no cabe en un DataFrame de
-    pandas. Regresa el total de filas escritas.
+    pandas. Regresa el total de filas escritas. `output` es la ruta destino:
+    con --limit se manda a un archivo aparte.
     """
-    UNIFIED_TRIPS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
     schema = None
     total_rows = 0
     writer = None
@@ -396,7 +397,7 @@ def build_unified_parquet(entries: list[MonthFile]) -> int:
             table = pa.Table.from_pandas(df, preserve_index=False)
             if writer is None:
                 schema = table.schema
-                writer = pq.ParquetWriter(UNIFIED_TRIPS_PATH, schema, compression="snappy")
+                writer = pq.ParquetWriter(output, schema, compression="snappy")
             else:
                 table = table.cast(schema)
             writer.write_table(table)
@@ -437,13 +438,32 @@ def build_nomenclatura() -> int:
     return len(nom)
 
 
-def write_manifest(entries: list[MonthFile], total_rows: int, n_stations: int) -> None:
+def output_paths(limit: int | None) -> tuple[Path, Path]:
+    """Rutas de salida de la ingesta: (Parquet unificado, manifiesto).
+
+    Con --limit (modo prueba) se escribe todo aparte para no pisar ni el
+    Parquet unificado ni data/manifest.json, que es lo que se versiona.
+    """
+    if limit:
+        return RAW_DATA_DIR / "mibici_viajes_limit.parquet", DATA_DIR / "manifest_limit.json"
+    return UNIFIED_TRIPS_PATH, MANIFEST_PATH
+
+
+def write_manifest(
+    entries: list[MonthFile],
+    total_rows: int,
+    n_stations: int,
+    unified_path: Path = UNIFIED_TRIPS_PATH,
+    manifest_path: Path = MANIFEST_PATH,
+) -> None:
     """Escribe el manifiesto de versionado de datos.
 
     Es el artefacto que se versiona en Git (data/manifest.json): contiene el
     hash SHA-256 de cada archivo descargado, los archivos unificados y el
     total de registros. Su propio hash se puede registrar en MLflow como
     parámetro `data_version` para ligar cada run a la versión exacta de datos.
+    Con --limit se escribe en `manifest_path` (data/manifest_limit.json), que
+    no se versiona.
     """
     files = []
     for entry in tqdm(entries, desc="Hasheando"):
@@ -468,9 +488,9 @@ def write_manifest(entries: list[MonthFile], total_rows: int, n_stations: int) -
         "total_rows": total_rows,
         "n_stations": n_stations,
         "unified_parquet": {
-            "path": str(UNIFIED_TRIPS_PATH.relative_to(DATA_DIR.parent)),
-            "size_bytes": UNIFIED_TRIPS_PATH.stat().st_size,
-            "sha256": sha256_of(UNIFIED_TRIPS_PATH),
+            "path": str(unified_path.relative_to(DATA_DIR.parent)),
+            "size_bytes": unified_path.stat().st_size,
+            "sha256": sha256_of(unified_path),
             "rows": total_rows,
         },
         "nomenclatura": {
@@ -482,11 +502,11 @@ def write_manifest(entries: list[MonthFile], total_rows: int, n_stations: int) -
         "files": files,
     }
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Hash del manifiesto completo: el "data_version" que se registra en MLflow
-    manifest_hash = sha256_of(MANIFEST_PATH)
-    logger.success(f"Manifiesto: {MANIFEST_PATH} (hash={manifest_hash[:12]}…)")
+    manifest_hash = sha256_of(manifest_path)
+    logger.success(f"Manifiesto: {manifest_path} (hash={manifest_hash[:12]}…)")
 
 
 @app.command()
@@ -497,7 +517,9 @@ def main(
     skip_download: bool = typer.Option(
         False, help="No descargar; usa los CSV ya presentes en data/raw/csv"
     ),
-    limit: int = typer.Option(None, help="Solo los primeros N meses (para pruebas)"),
+    limit: int = typer.Option(
+        None, help="Solo los primeros N meses (para pruebas); escribe todo aparte"
+    ),
     force: bool = typer.Option(
         False,
         "--force",
@@ -522,14 +544,16 @@ def main(
     if not entries:
         raise typer.BadParameter("El rango seleccionado no contiene meses")
 
+    unified_path, manifest_path = output_paths(limit)
+
     logger.info(f"Catálogo: {len(entries)} meses ({entries[0].label} .. {entries[-1].label})")
 
-    if UNIFIED_TRIPS_PATH.exists() and not force:
-        existing_rows = pq.ParquetFile(UNIFIED_TRIPS_PATH).metadata.num_rows
-        size_mb = UNIFIED_TRIPS_PATH.stat().st_size / 1e6
+    if unified_path.exists() and not force:
+        existing_rows = pq.ParquetFile(unified_path).metadata.num_rows
+        size_mb = unified_path.stat().st_size / 1e6
         logger.warning(
             f"El Parquet unificado ya existe ({size_mb:,.0f} MB, "
-            f"{existing_rows:,} filas): {UNIFIED_TRIPS_PATH.name}"
+            f"{existing_rows:,} filas): {unified_path.name}"
         )
         logger.warning(
             f"Regenerarlo vuelve a descargar los {len(entries)} CSVs y sobrescribe el archivo actual."
@@ -545,14 +569,19 @@ def main(
         download_all(entries, workers=workers)
 
     n_stations = build_nomenclatura()
-    total_rows = build_unified_parquet(entries)
-    write_manifest(entries, total_rows, n_stations)
+    total_rows = build_unified_parquet(entries, unified_path)
+    write_manifest(entries, total_rows, n_stations, unified_path, manifest_path)
 
     elapsed = time.time() - t0
     logger.success(
         f"Ingesta completa en {elapsed / 60:.1f} min: {total_rows:,} viajes, "
-        f"{n_stations} estaciones -> {UNIFIED_TRIPS_PATH.name}"
+        f"{n_stations} estaciones -> {unified_path.name}"
     )
+    if limit:
+        logger.info(
+            f"Modo --limit: se escribieron {unified_path.name} y {manifest_path.name} aparte; "
+            "el Parquet unificado y data/manifest.json quedaron como estaban."
+        )
 
 
 if __name__ == "__main__":

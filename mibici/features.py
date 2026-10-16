@@ -9,6 +9,8 @@ from mibici.config import (
     DATA_START,
     NOMENCLATURA_PARQUET_PATH,
     PROCESSED_DATA_DIR,
+    RISK_ALPHA,
+    RISK_HORIZON_HOURS,
     TRAIN_END,
     UNIFIED_TRIPS_PATH,
     VAL_END,
@@ -102,6 +104,38 @@ def add_station_features(df, nomenclatura):
     estaciones["latitud"] = estaciones["latitud"].astype("float32")
     estaciones["longitud"] = estaciones["longitud"].astype("float32")
     return df.merge(estaciones, on="estacion_id", how="left")
+
+
+def add_risk_label(df, horizon=RISK_HORIZON_HOURS, alpha=RISK_ALPHA):
+    """Etiqueta de riesgo de P2: la estacion se vacia o se satura en las proximas horas.
+
+    MiBici no publica el inventario de bicis, asi que el riesgo se aproxima con el
+    saldo neto (salidas - llegadas) de las horas t+1 .. t+horizon. Partiendo de una
+    estacion a media capacidad, si salen mas de alpha * capacidad bicis se queda vacia
+    y si llegan mas de alpha * capacidad se queda sin anclajes.
+    Ver references/proxy_riesgo_p2.md.
+
+    Usa horas futuras a proposito porque es el objetivo de P2, no una feature:
+    neto_fut y las etiquetas nunca deben entrar como variables del modelo.
+    Requiere la columna capacidad (add_station_features). Las ultimas horas de cada
+    estacion y las estaciones sin capacidad quedan en NA.
+    """
+    df = df.copy()
+    neto = df["salidas"].astype("int32") - df["llegadas"].astype("int32")
+    grupos = neto.groupby(df["estacion_id"])
+    futuras = pd.DataFrame(index=df.index)
+    for k in range(1, horizon + 1):
+        futuras[k] = grupos.shift(-k)
+    df["neto_fut"] = futuras.sum(axis=1, skipna=False).astype("float32")
+
+    umbral = alpha * df["capacidad"]
+    vaciado = df["neto_fut"] >= umbral
+    saturacion = df["neto_fut"] <= -umbral
+    valido = df["neto_fut"].notna() & (df["capacidad"] > 0)
+    df["riesgo_vaciado"] = vaciado.astype("Int8").where(valido)
+    df["riesgo_saturacion"] = saturacion.astype("Int8").where(valido)
+    df["riesgo"] = (vaciado | saturacion).astype("Int8").where(valido)
+    return df
 
 
 def assign_split(df):
