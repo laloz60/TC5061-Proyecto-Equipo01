@@ -94,6 +94,19 @@ def test_manifest_is_versioned_and_complete():
     assert len(manifest["unified_parquet"]["sha256"]) == 64
 
 
+def test_output_paths_limit_escribe_aparte():
+    """Con --limit no se pisan ni el parquet unificado ni el manifiesto versionado."""
+    unified, manifest = ds.output_paths(limit=None)
+    assert unified == UNIFIED_TRIPS_PATH
+    assert manifest == MANIFEST_PATH
+
+    unified_l, manifest_l = ds.output_paths(limit=2)
+    assert unified_l != UNIFIED_TRIPS_PATH
+    assert unified_l.suffix == ".parquet"
+    assert manifest_l != MANIFEST_PATH
+    assert manifest_l.name == "manifest_limit.json"
+
+
 def test_read_csv_normalized_handles_null_literals(tmp_path):
     csv = tmp_path / "sample.csv"
     csv.write_text(
@@ -147,7 +160,7 @@ def test_cli_force_skips_confirmation_and_runs(tmp_path, monkeypatch):
     monkeypatch.setattr(ds, "UNIFIED_TRIPS_PATH", fake)
     monkeypatch.setattr(ds, "download_all", lambda *a, **k: None)
     monkeypatch.setattr(ds, "build_nomenclatura", lambda: 484)
-    monkeypatch.setattr(ds, "build_unified_parquet", lambda entries: 1_000_000)
+    monkeypatch.setattr(ds, "build_unified_parquet", lambda *args, **kwargs: 1_000_000)
     monkeypatch.setattr(ds, "write_manifest", lambda *a, **k: None)
 
     result = runner.invoke(app, ["--force"])
