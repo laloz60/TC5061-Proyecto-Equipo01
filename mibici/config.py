@@ -58,6 +58,15 @@ VAL_END = date(2025, 6, 30)
 # Ventana de prueba: (VAL_END .. DATA_END]
 # Es decir: train 2023-05..2024-12 | val 2025-01..2025-06 | test 2025-07..2026-09
 
+# ---------------------------------------------------------------------------
+# Proxy de riesgo de P2 (ver references/proxy_riesgo_p2.md)
+# ---------------------------------------------------------------------------
+# Una estación está en riesgo si en las próximas RISK_HORIZON_HOURS horas su
+# saldo neto (salidas - llegadas) llega a RISK_ALPHA veces su capacidad.
+RISK_HORIZON_HOURS = 3
+RISK_ALPHA = 0.5
+
+
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135
 try:
