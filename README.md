@@ -50,7 +50,7 @@ pip install -r requirements.txt  # instala también el paquete mibici (-e .)
 python -m mibici.dataset               # primera vez: descarga los 41 CSVs y unifica
 python -m mibici.dataset --skip-download  # CSVs ya presentes: solo re-unifica
 python -m mibici.dataset --force       # regenera aunque exista el Parquet
-python -m mibici.dataset --limit 2     # prueba rápida con 2 meses
+python -m mibici.dataset --limit 2     # prueba rápida con 2 meses (escribe todo aparte)
 ```
 
 Salidas:
@@ -60,6 +60,8 @@ data/raw/mibici_viajes_2023_05_a_2026_09.parquet   # Parquet unificado (no versi
 data/raw/nomenclatura_estaciones.parquet           # 484 estaciones: capacidad, lat/lon
 data/manifest.json                                 # versionado: totales + SHA-256
 ```
+
+Con `--limit` los archivos de prueba salen en `data/raw/mibici_viajes_limit.parquet` y `data/manifest_limit.json`: no se versionan y no reemplazan a los de arriba, así que el manifiesto completo solo lo escribe la ingesta completa.
 
 Verificación de que tus datos son idénticos a los del equipo:
 
@@ -80,6 +82,8 @@ Genera `data/processed/features_estacion_hora.parquet` con una fila por estació
 ```bash
 mlflow ui                             # UI en http://127.0.0.1:5000
 ```
+
+En un clon nuevo MLflow arranca vacío: `mlflow.db` y `mlruns/` no se versionan, así que los runs se regeneran con los comandos de esta sección (las capturas de evidencia están en `reports/figures/mlflow_evidencia/`).
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.

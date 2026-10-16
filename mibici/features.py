@@ -105,6 +105,7 @@ def add_station_features(df, nomenclatura):
     estaciones["longitud"] = estaciones["longitud"].astype("float32")
     return df.merge(estaciones, on="estacion_id", how="left")
 
+
 def add_risk_label(df, horizon=RISK_HORIZON_HOURS, alpha=RISK_ALPHA):
     """Etiqueta de riesgo de P2: la estacion se vacia o se satura en las proximas horas.
 
