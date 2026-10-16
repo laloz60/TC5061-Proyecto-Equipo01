@@ -83,6 +83,8 @@ Genera `data/processed/features_estacion_hora.parquet` con una fila por estació
 mlflow ui                             # UI en http://127.0.0.1:5000
 ```
 
+En un clon nuevo MLflow arranca vacío: `mlflow.db` y `mlruns/` no se versionan, así que los runs se regeneran con los comandos de esta sección (las capturas de evidencia están en `reports/figures/mlflow_evidencia/`).
+
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
 - Entrenamiento: `python -m mibici.modeling.train` (falta P2). Antes de P1 correr `python -m mibici.features` para generar las features.
