@@ -102,7 +102,9 @@ def main(
     nomenclatura = pd.read_parquet(nomenclatura_path)
 
     df = build_risk_table(trips, nomenclatura)
-    logger.info(f"Estacion x hora con etiqueta: {len(df):,} filas, {df['estacion_id'].nunique()} estaciones")
+    logger.info(
+        f"Estacion x hora con etiqueta: {len(df):,} filas, {df['estacion_id'].nunique()} estaciones"
+    )
 
     sens = sensitivity(df)
     top = top_stations(df, nomenclatura)

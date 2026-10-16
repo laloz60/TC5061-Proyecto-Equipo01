@@ -25,6 +25,7 @@ include = ["pyproject.toml", "mibici/**/*.py"]
 
 [tool.ruff.lint]
 extend-select = ["I"]  # Add import sorting
+ignore = ["B008"]  # typer.Option(...) en los defaults es el patrón normal de Typer
 
 [tool.ruff.lint.isort]
 known-first-party = ["mibici"]
