@@ -350,6 +350,7 @@ def train_p2(
         precision = precision_score(y_test, y_pred, zero_division=0)
         recall = recall_score(y_test, y_pred, zero_division=0)
         f1_macro = f1_score(y_test, y_pred, average="macro", zero_division=0)
+
         # ROC en la parte de arriba
         
         logger.success(f"Métricas P2 -> Precision: {precision:.2f} | Recall: {recall:.2f} | F1: {f1_macro:.2f} | ROC-AUC: {roc:.2f}")
