@@ -157,32 +157,13 @@ class KMeansClusterTrainer(BaseTrainer):
         model_path: Path,
     ):
         """Calcula el Silhouette Score, serializa el modelo y registra artefactos y trazabilidad completa en MLflow."""
-        import subprocess
-        import json
-
-        # 1. Tag git_commit dinámico (git rev-parse HEAD via subprocess) - Criterio Issue #22
-        try:
-            git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
-        except Exception:
-            git_commit = "10dfa34"  # Fallback seguro
-
-        # 2. Lectura del hash SHA-256 del Parquet unificado desde data/manifest.json - Criterio Issue #22
-        data_hash = "N/A"
-        manifest_path = Path("data/manifest.json")
-        if manifest_path.exists():
-            try:
-                with open(manifest_path, "r", encoding="utf-8") as f:
-                    manifest = json.load(f)
-                    data_hash = manifest.get("sha256", manifest.get("unified_trips_sha256", "N/A"))
-            except Exception:
-                pass
+        from mibici.modeling.tracking import data_params, run_tags, split_params
 
         run_type = "baseline" if self.init_method == "random" else "candidate"
         run_name = f"p3-{run_type}-k{self.n_clusters}"
 
         with mlflow.start_run(run_name=run_name):
             # Trazabilidad de Parámetros e Hiperparámetros
-            mlflow.log_param("question", self.question)
             mlflow.log_param("model_type", self.model_type)
             mlflow.log_param("n_clusters", self.n_clusters)
             mlflow.log_param("init_method", self.init_method)
@@ -190,21 +171,12 @@ class KMeansClusterTrainer(BaseTrainer):
             mlflow.log_param("random_state", SEED)
             mlflow.log_param("features_representation", "perfiles_horarios_24h")
 
-            # 3. mlflow.log_param con las ventanas train/val/test - Criterio Issue #22
-            mlflow.log_param("train_date_start", "2023-01-01")
-            mlflow.log_param("train_date_end", "2024-12-31")
-            mlflow.log_param("val_date_start", "2025-01-01")
-            mlflow.log_param("val_date_end", "2025-06-30")
-            mlflow.log_param("test_date_start", "2025-07-01")
-            mlflow.log_param("test_date_end", "2025-12-31")
+            # Ventanas train/val/test (de config.py) y hash de los datos (de data/manifest.json)
+            mlflow.log_params(split_params())
+            mlflow.log_params(data_params())
 
-            # 4. mlflow.log_param con el hash SHA-256 de los datos - Criterio Issue #22
-            mlflow.log_param("data_sha256", data_hash)
-
-            # Etiquetas obligatorias (Tags) con el commit real dinámico
-            mlflow.set_tag("team", "equipo01")
-            mlflow.set_tag("question", self.question)
-            mlflow.set_tag("git_commit", git_commit)
+            # Etiquetas obligatorias (tags): equipo, pregunta y commit real dinámico
+            mlflow.set_tags(run_tags("P3"))
 
             # Métrica cuantitativa de clustering
             sil_score = silhouette_score(X_profiles, labels)
@@ -266,11 +238,15 @@ def train_p3(
 
 @app.command("p1")
 def train_p1(
-    features_path: Path = typer.Option(PROCESSED_DATA_DIR / "features.csv", help="Características P1."),
-    model_path: Path = typer.Option(MODELS_DIR / "model_p1.pkl", help="Modelo P1."),
+    model: str = typer.Option("ridge", help="Baseline: 'ridge' | Candidato: 'rf'"),
+    features_path: Path = typer.Option(None, help="Features estación x hora (parquet de features.py)."),
+    rf_max_samples: int = typer.Option(500_000, help="Filas por árbol del RandomForest."),
 ):
-    """Comando reservado para la Pregunta P1 (Regresión)."""
-    logger.info("Comando P1 (Regresión) pendiente de implementación modular por el equipo.")
+    """Entrena P1 (Regresión) y lo compara contra el baseline de 4 semanas."""
+    from mibici.features import FEATURES_PATH
+    from mibici.modeling.regression import train_p1 as entrenar_p1
+
+    entrenar_p1(features_path or FEATURES_PATH, kind=model, rf_max_samples=rf_max_samples)
 
 
 @app.command("p2")
