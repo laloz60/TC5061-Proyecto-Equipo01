@@ -1,22 +1,22 @@
 {
   "dataset": "mibici_viajes",
   "source_url": "https://mibici.net/es/datos-abiertos",
-  "generated_at": "2026-10-16T09:26:34.097345+00:00",
-  "n_months": 2,
+  "generated_at": "2026-10-14T22:03:47.310512+00:00",
+  "n_months": 41,
   "first_month": "2023-05",
-  "last_month": "2023-06",
-  "total_rows": 703812,
+  "last_month": "2026-09",
+  "total_rows": 15376127,
   "n_stations": 484,
   "unified_parquet": {
-    "path": "data\\raw\\mibici_viajes_2023_05_a_2026_09.parquet",
-    "size_bytes": 16149330,
-    "sha256": "37b9b23caf8e2a7caacb6bb6f4adb136efe9258d33590bd3c269210a24f5c346",
-    "rows": 703812
+    "path": "data/raw/mibici_viajes_2023_05_a_2026_09.parquet",
+    "size_bytes": 338958651,
+    "sha256": "fbb830d06a019f81698727c9bc898c5859f1388e41983f89b33905cde3a8ff94",
+    "rows": 15376127
   },
   "nomenclatura": {
     "url": "https://mibici.net/site/assets/files/1118/nomenclatura_2026_09.csv",
-    "path": "data\\raw\\nomenclatura_estaciones.parquet",
-    "sha256": "24905adf8fb6cc46e4e7ed598a3d6d8d43c89404b06cdc70d04e7be4290154ce",
+    "path": "data/raw/nomenclatura_estaciones.parquet",
+    "sha256": "73161cc6d75f59e85b0f3437b62e4d0b11b77bbf1e388d86c9a2ae8052fbae30",
     "rows": 484
   },
   "files": [
@@ -24,8 +24,8 @@
       "month": "2023-05",
       "url": "https://mibici.net/site/assets/files/46759/datos_abiertos_2023_05.csv",
       "filename": "datos_abiertos_2023_05.csv",
-      "size_bytes": 31498531,
-      "sha256": "ae5d16f015f5396ca11a86a9cc9b287f06ecf25ec1771eaa40197d03bbaa2c11"
+      "size_bytes": 31496367,
+      "sha256": "c6e5ce44b86debd8f1655ea6e3fb3012cf7c17295a8b2f4764afc0a453c568ee"
     },
     {
       "month": "2023-06",
@@ -33,6 +33,279 @@
       "filename": "datos_abiertos_2023_06.csv",
       "size_bytes": 29369568,
       "sha256": "d0147afd4bb2b4fb20d43d52fd3df019fce77d0dcffa4755b12a9ab7fc375aa4"
+    },
+    {
+      "month": "2023-07",
+      "url": "https://mibici.net/site/assets/files/49448/datos_abiertos_2023_07.csv",
+      "filename": "datos_abiertos_2023_07.csv",
+      "size_bytes": 28686693,
+      "sha256": "c9ceca9a8814d968ad0eb278b5ae77f265d18d867ec780c77e9b41ebec7c56b1"
+    },
+    {
+      "month": "2023-08",
+      "url": "https://mibici.net/site/assets/files/51295/datos_abiertos_2023_08.csv",
+      "filename": "datos_abiertos_2023_08.csv",
+      "size_bytes": 30690816,
+      "sha256": "1ec42a5b46725474c5ff92e78a5b857468fbdeb06048af6a8e0c52e652f6784f"
+    },
+    {
+      "month": "2023-09",
+      "url": "https://mibici.net/site/assets/files/53344/datos_abiertos_2023_09.csv",
+      "filename": "datos_abiertos_2023_09.csv",
+      "size_bytes": 31478963,
+      "sha256": "17e475dfff0d6df966c62a23ffef810d8d4e80144331007c73f4df947a6c83a6"
+    },
+    {
+      "month": "2023-10",
+      "url": "https://mibici.net/site/assets/files/54935/datos_abiertos_2023_10.csv",
+      "filename": "datos_abiertos_2023_10.csv",
+      "size_bytes": 33158908,
+      "sha256": "540d673e4c6cb56ab4737ffc1c23169a96a3a4d984be2a2fecfdef29cf5a0838"
+    },
+    {
+      "month": "2023-11",
+      "url": "https://mibici.net/site/assets/files/57344/datos_abiertos_2023_11.csv",
+      "filename": "datos_abiertos_2023_11.csv",
+      "size_bytes": 25027708,
+      "sha256": "165a429e703727b3b84bd99ad25926db24f513bc4c7db30061b7b06067fba30f"
+    },
+    {
+      "month": "2023-12",
+      "url": "https://mibici.net/site/assets/files/58715/datos_abiertos_2023_12.csv",
+      "filename": "datos_abiertos_2023_12.csv",
+      "size_bytes": 27182929,
+      "sha256": "df5c65895f673a6de01c20b6d2d8d57790669cb7986de1c599ebc1719a29372d"
+    },
+    {
+      "month": "2024-01",
+      "url": "https://mibici.net/site/assets/files/61450/datos_abiertos_2024_01.csv",
+      "filename": "datos_abiertos_2024_01.csv",
+      "size_bytes": 33908887,
+      "sha256": "01d1c136609df006410a2f8d9b925f20991e28cfe0c882ed67bca63b46b6d1a5"
+    },
+    {
+      "month": "2024-02",
+      "url": "https://mibici.net/site/assets/files/77251/datos_abiertos_2024_02.csv",
+      "filename": "datos_abiertos_2024_02.csv",
+      "size_bytes": 33242518,
+      "sha256": "78254eb6b99b9b9fb46cc5bb58fd54bc9fed681d9c224143b99cf693deec8430"
+    },
+    {
+      "month": "2024-03",
+      "url": "https://mibici.net/site/assets/files/77252/datos_abiertos_2024_03.csv",
+      "filename": "datos_abiertos_2024_03.csv",
+      "size_bytes": 33824245,
+      "sha256": "6c45a6ec1f136c58bfcb6fdd385c4e1ac2f4b887d0413dbf6e8b5c70a91da0d5"
+    },
+    {
+      "month": "2024-04",
+      "url": "https://mibici.net/site/assets/files/80028/datos_abiertos_2024_04.csv",
+      "filename": "datos_abiertos_2024_04.csv",
+      "size_bytes": 35119762,
+      "sha256": "d60f68ebc083b0cea29d6e7a0e18eba95c4582220a79717df96365bf7dd33a11"
+    },
+    {
+      "month": "2024-05",
+      "url": "https://mibici.net/site/assets/files/81663/datos_abiertos_2024_05.csv",
+      "filename": "datos_abiertos_2024_05.csv",
+      "size_bytes": 35597286,
+      "sha256": "21288117db70fad4e475cc5fb6acab174a84c09749170c0976337076aacc1b9e"
+    },
+    {
+      "month": "2024-06",
+      "url": "https://mibici.net/site/assets/files/83901/datos_abiertos_2024_06.csv",
+      "filename": "datos_abiertos_2024_06.csv",
+      "size_bytes": 31623557,
+      "sha256": "cd073cecc62cd7a358b1a54f342ad78ca0fa6a94d039e97e1920ae3323cd91a5"
+    },
+    {
+      "month": "2024-07",
+      "url": "https://mibici.net/site/assets/files/85500/datos_abiertos_2024_07.csv",
+      "filename": "datos_abiertos_2024_07.csv",
+      "size_bytes": 31551829,
+      "sha256": "0d6dab9e3c5d1ed6f43f5c3ce65aea9ea51cd151c62cd80d4e068668cb947748"
+    },
+    {
+      "month": "2024-08",
+      "url": "https://mibici.net/site/assets/files/87665/datos_abiertos_2024_08.csv",
+      "filename": "datos_abiertos_2024_08.csv",
+      "size_bytes": 34220772,
+      "sha256": "4d6bd19355c8e8a0829b280ce8844bd2c1b82e5e3ffcfca3eee07e10d2efe796"
+    },
+    {
+      "month": "2024-09",
+      "url": "https://mibici.net/site/assets/files/89736/datos_abiertos_2024_09.csv",
+      "filename": "datos_abiertos_2024_09.csv",
+      "size_bytes": 25448981,
+      "sha256": "d4f7653879861abb67ffda890dd79d0cc8b71edbb043162f19bb0125eaf60fd3"
+    },
+    {
+      "month": "2024-10",
+      "url": "https://mibici.net/site/assets/files/91758/datos_abiertos_2024_10.csv",
+      "filename": "datos_abiertos_2024_10.csv",
+      "size_bytes": 27315974,
+      "sha256": "9146623af19ea413a817a5077048b605ac5f4cd1bbe65f0d161ae39d2a9258c7"
+    },
+    {
+      "month": "2024-11",
+      "url": "https://mibici.net/site/assets/files/93516/datos_abiertos_2024_11.csv",
+      "filename": "datos_abiertos_2024_11.csv",
+      "size_bytes": 33902108,
+      "sha256": "85607feef22f75f1a1893ec5dbd3f8cfc1d01a2ef1c206418629ef672b2582ac"
+    },
+    {
+      "month": "2024-12",
+      "url": "https://mibici.net/site/assets/files/94962/datos_abiertos_2024_12.csv",
+      "filename": "datos_abiertos_2024_12.csv",
+      "size_bytes": 29469190,
+      "sha256": "4541d595fb6c539007b9309d128036356c128f2f523fe8b009050e3bf633c7d0"
+    },
+    {
+      "month": "2025-01",
+      "url": "https://mibici.net/site/assets/files/97653/datos_abiertos_2025_01.csv",
+      "filename": "datos_abiertos_2025_01.csv",
+      "size_bytes": 32959338,
+      "sha256": "90ee75701a69374926af0400d204f3280baed0e3c1a1f97d9e6c0b283757125a"
+    },
+    {
+      "month": "2025-02",
+      "url": "https://mibici.net/site/assets/files/99879/datos_abiertos_2025_02.csv",
+      "filename": "datos_abiertos_2025_02.csv",
+      "size_bytes": 32304810,
+      "sha256": "f52f13f59eb2f1517e05c72f0a3d3d70c5b0fa6b86626c7325e8ca3b15ff74f8"
+    },
+    {
+      "month": "2025-03",
+      "url": "https://mibici.net/site/assets/files/101986/datos_abiertos_2025_03.csv",
+      "filename": "datos_abiertos_2025_03.csv",
+      "size_bytes": 35131572,
+      "sha256": "e5aa1b5d197f294022d3f0ff1b55bf553fcbdb697b50d43deaddf8dca36fed64"
+    },
+    {
+      "month": "2025-04",
+      "url": "https://mibici.net/site/assets/files/103813/datos_abiertos_2025_04.csv",
+      "filename": "datos_abiertos_2025_04.csv",
+      "size_bytes": 31755599,
+      "sha256": "630e637d6611aadc67aad321edcd541361220473bddf8e34ecba46c0e29d7341"
+    },
+    {
+      "month": "2025-05",
+      "url": "https://mibici.net/site/assets/files/105513/datos_abiertos_2025_05.csv",
+      "filename": "datos_abiertos_2025_05.csv",
+      "size_bytes": 34332994,
+      "sha256": "e0a744412a1e840c1d24c24269565a123b35739c0bac494b9c0f53ba0a2c43c2"
+    },
+    {
+      "month": "2025-06",
+      "url": "https://mibici.net/site/assets/files/107088/datos_abiertos_2025_06.csv",
+      "filename": "datos_abiertos_2025_06.csv",
+      "size_bytes": 30924814,
+      "sha256": "063e3523db00c90899f08fb134c4c382667eb0e4d8b6358890d426409c6f4c9e"
+    },
+    {
+      "month": "2025-07",
+      "url": "https://mibici.net/site/assets/files/108898/datos_abiertos_2025_07.csv",
+      "filename": "datos_abiertos_2025_07.csv",
+      "size_bytes": 31932339,
+      "sha256": "a71a9e2a629ff91b021f57e302958e64fa545678d6373aaf0fed62dfc7bebd29"
+    },
+    {
+      "month": "2025-08",
+      "url": "https://mibici.net/site/assets/files/111021/datos_abiertos_2025_08.csv",
+      "filename": "datos_abiertos_2025_08.csv",
+      "size_bytes": 32506714,
+      "sha256": "382e62f3eb878e13faf4c93d031c8efcf765c392b3402d27b264613f9ff4a56d"
+    },
+    {
+      "month": "2025-09",
+      "url": "https://mibici.net/site/assets/files/113216/datos_abiertos_2025_09.csv",
+      "filename": "datos_abiertos_2025_09.csv",
+      "size_bytes": 32686988,
+      "sha256": "218bed1587a70ec5fc5e8589a04783532301f19c55acd3633fa219c96860e720"
+    },
+    {
+      "month": "2025-10",
+      "url": "https://mibici.net/site/assets/files/115104/datos_abiertos_2025_10.csv",
+      "filename": "datos_abiertos_2025_10.csv",
+      "size_bytes": 36442309,
+      "sha256": "505d9b8b59f65fa223f7889189b74b9fe167c9dda11c7e7053536a360c611370"
+    },
+    {
+      "month": "2025-11",
+      "url": "https://mibici.net/site/assets/files/116773/datos_abiertos_2025_11.csv",
+      "filename": "datos_abiertos_2025_11.csv",
+      "size_bytes": 32997087,
+      "sha256": "f5c4f1b0c0842339dfdfaac756607314bdf5b64d17cde58d754f5a5a2e1a5fbe"
+    },
+    {
+      "month": "2025-12",
+      "url": "https://mibici.net/site/assets/files/118153/datos_abiertos_2025_12.csv",
+      "filename": "datos_abiertos_2025_12.csv",
+      "size_bytes": 29089463,
+      "sha256": "b9fbb7386666ac3d452e3d3ef40ab443c39eef349cd9c97207230371e1d2d001"
+    },
+    {
+      "month": "2026-01",
+      "url": "https://mibici.net/site/assets/files/120163/datos_abiertos_2026_01.csv",
+      "filename": "datos_abiertos_2026_01.csv",
+      "size_bytes": 30985189,
+      "sha256": "c40d7a43eb1c0b1523d6267bcdfac1daad04179ef1f0a7cf93f09b2df82285c2"
+    },
+    {
+      "month": "2026-02",
+      "url": "https://mibici.net/site/assets/files/121761/datos_abiertos_2026_02.csv",
+      "filename": "datos_abiertos_2026_02.csv",
+      "size_bytes": 28953901,
+      "sha256": "2d78fa9686477bdedbf333423e6aadc63b265aaef038eb0b09701746a155ae1f"
+    },
+    {
+      "month": "2026-03",
+      "url": "https://mibici.net/site/assets/files/123236/datos_abiertos_2026_03.csv",
+      "filename": "datos_abiertos_2026_03.csv",
+      "size_bytes": 32640591,
+      "sha256": "97c273aa7465c99d509dfc58436122a979ad51af00bd527cef6144210375d16e"
+    },
+    {
+      "month": "2026-04",
+      "url": "https://mibici.net/site/assets/files/124927/datos_abiertos_2026_04.csv",
+      "filename": "datos_abiertos_2026_04.csv",
+      "size_bytes": 30523683,
+      "sha256": "9165342d0169f2c0ba4fb2c944003147c8a95d77f9058361b451cadf141b2483"
+    },
+    {
+      "month": "2026-05",
+      "url": "https://mibici.net/site/assets/files/125943/datos_abiertos_2026_05.csv",
+      "filename": "datos_abiertos_2026_05.csv",
+      "size_bytes": 27427394,
+      "sha256": "d0ac16ae3a75b8ac40565176e2e607c99c756a385860caa7e2ffb351082c9d45"
+    },
+    {
+      "month": "2026-06",
+      "url": "https://mibici.net/site/assets/files/127734/datos_abiertos_2026_06.csv",
+      "filename": "datos_abiertos_2026_06.csv",
+      "size_bytes": 30826027,
+      "sha256": "a4d195786a3599b155829288a0432cd9e76c6780dc693c0e9579d11e11c49a27"
+    },
+    {
+      "month": "2026-07",
+      "url": "https://mibici.net/site/assets/files/129006/datos_abiertos_2026_07.csv",
+      "filename": "datos_abiertos_2026_07.csv",
+      "size_bytes": 33696291,
+      "sha256": "3f9db9fed985977b175001a984302eae7c61326a75ed93afae9c8fc17bbdb922"
+    },
+    {
+      "month": "2026-08",
+      "url": "https://mibici.net/site/assets/files/130362/datos_abiertos_2026_08.csv",
+      "filename": "datos_abiertos_2026_08.csv",
+      "size_bytes": 34158210,
+      "sha256": "e34f39b9ad204ae0b66f3538894a5f86ed03f46d98701169d3e4d95952d5f671"
+    },
+    {
+      "month": "2026-09",
+      "url": "https://mibici.net/site/assets/files/131825/datos_abiertos_2026_09.csv",
+      "filename": "datos_abiertos_2026_09.csv",
+      "size_bytes": 42566896,
+      "sha256": "00b5cf64cc31a502d01044d905f6e033f9bc1db962e771119742fd25c6cb58b3"
     }
   ]
 }
