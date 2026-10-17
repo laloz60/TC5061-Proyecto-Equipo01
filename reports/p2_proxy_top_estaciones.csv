@@ -1,0 +1,11 @@
+estacion_id,horas,riesgo_pct,horas_vaciado,horas_saturacion,nombre,capacidad
+51,29973,35.65,4050,6634,(GDL-049) Lopez Cotilla / Penitenciaría,39
+35,29966,28.62,794,7781,(GDL-033) Av. Hidalgo / C. Pedro Loza,15
+160,29967,24.66,3631,3759,(GDL-093) C. H Colegio Militar / Av. Américas,15
+42,29973,20.85,1957,4293,(GDL-040) C. Morelos / C. Progreso,19
+260,29967,19.87,284,5669,(GDL-187) Av. 16 de Septiembre / C. Priscilia,15
+199,29967,19.78,4197,1731,(GDL-132) C. Lope de Vega / Av. La Paz,15
+34,29973,19.66,587,5306,(GDL-032) C. Degollado / Av. Miguel Hidalgo,15
+154,29967,17.85,2492,2858,(GDL-087) Av. Américas / Av. López Mateos,15
+194,29973,17.41,4849,368,(GDL-127) Av. Vallarta / Av. de Los Arcos,19
+11,29972,16.04,3336,1472,(GDL-009) Calz. Federalismo/ C. J. Angulo,23
