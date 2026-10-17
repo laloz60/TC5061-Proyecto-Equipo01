@@ -77,6 +77,18 @@ python -m mibici.features
 
 Genera `data/processed/features_estacion_hora.parquet` con una fila por estación y hora: salidas, llegadas, variables de calendario, lags, promedios y capacidad de la estación. Los lags y promedios solo usan horas anteriores.
 
+## P2 (Clasificación)
+
+Para ejecutar el entrenamiento de los modelos de clasificación y registrar los experimentos y artefactos en MLflow, utiliza los siguientes comandos:
+
+```bash
+python -m mibici.modeling.train p2 --model-name dummy
+python -m mibici.modeling.train p2 --model-name logreg
+```
+Esta etapa evalúa y predice si una estación se encuentra en riesgo de desabastecimiento de bicicletas. Mediante 2 modelos, depende de cual seleccionemos.
+1. **Modelo Baseline (`dummy`):** Clasificador por defecto que establece el rendimiento mínimo de referencia utilizando clases mayoritarias.
+2. **Modelo Candidato (`logreg`):** Modelo basado en Regresión Logística, diseñado para capturar relaciones lineales.
+
 ## Experimentos (MLflow)
 
 ```bash
@@ -97,6 +109,11 @@ En un clon nuevo MLflow arranca vacío: `mlflow.db` y `mlruns/` no se versionan,
   ```bash
   python mibici/modeling/train.py p3
   ```
+
+Las capturas de pantalla de los *runs*, artefactos y comparación de modelos se encuentran en:
+```text
+reports/figures/mkflow_evidencia/
+```
 
 ## Buenas prácticas
 
