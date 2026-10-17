@@ -112,7 +112,7 @@ En un clon nuevo MLflow arranca vacío: `mlflow.db` y `mlruns/` no se versionan,
 
 Las capturas de pantalla de los *runs*, artefactos y comparación de modelos se encuentran en:
 ```text
-reports/figures/mkflow_evidencia/
+reports/figures/mlflow_evidencia/
 ```
 
 ## Buenas prácticas
