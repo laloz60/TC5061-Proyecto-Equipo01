@@ -99,11 +99,16 @@ En un clon nuevo MLflow arranca vacío: `mlflow.db` y `mlruns/` no se versionan,
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
-- Entrenamiento: `python -m mibici.modeling.train` (falta P2). Antes de P1 correr `python -m mibici.features` para generar las features.
+- Entrenamiento: `python -m mibici.modeling.train`. Antes de P1 y P2 correr `python -m mibici.features` para generar las features.
 - **P1 (Regresión)** — baseline `ridge` y candidato `rf`:
   ```bash
   python -m mibici.modeling.train p1 --model ridge
   python -m mibici.modeling.train p1 --model rf
+  ```
+- **P2 (Clasificación)** — baseline `dummy` y candidato `logreg`:
+  ```bash
+  python -m mibici.modeling.train p2 --model-name dummy
+  python -m mibici.modeling.train p2 --model-name logreg
   ```
 - **P3 (Clustering)** — baseline (K-Means con inicialización aleatoria):
   ```bash
