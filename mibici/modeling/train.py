@@ -30,7 +30,6 @@ from sklearn.metrics import (
     roc_auc_score,
     silhouette_score,
 )
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import typer
 
@@ -39,16 +38,19 @@ from mibici.config import (
     MODELS_DIR,
     NOMENCLATURA_PARQUET_PATH,
     PROCESSED_DATA_DIR,
+    RISK_ALPHA,
+    RISK_HORIZON_HOURS,
     SEED,
 )
 
 import mlflow
 import mlflow.sklearn
-from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix, f1_score, precision_score, recall_score
 import seaborn as sns
 from sklearn.dummy import DummyClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 # Inicialización de la aplicación CLI
 app = typer.Typer(help="CLI modular para el entrenamiento de modelos de Machine Learning - MiBici")
@@ -266,122 +268,99 @@ def train_p1(
 
     entrenar_p1(features_path or FEATURES_PATH, kind=model, rf_max_samples=rf_max_samples)
 
-def add_risk_label(df): # Para P2
-    """Agrega la columna 'riesgo'"""
-    if 'viajes_salida_hora' in df.columns:
-        df['riesgo'] = (df['viajes_salida_hora'] > 10).astype(int)
-    else:
-        if 'riesgo' not in df.columns:
-            df['riesgo'] = 0
-            
-    y = df['riesgo']
-    return df, y
-
 @app.command("p2")
 def train_p2(
-    model_name: str = typer.Option("dummy", help="Modelo a entrenar: 'dummy' (baseline) o 'logreg' (candidato)."),
-    features_path: Path = typer.Option(PROCESSED_DATA_DIR / "features_estacion_hora.parquet", help="Características P2."),
-    model_path: Path = typer.Option(MODELS_DIR / "model_p2.pkl", help="Modelo P2."),):
-    
-    """Clasificación (P2)"""
+    model_name: str = typer.Option(
+        "dummy", help="Modelo a entrenar: 'dummy' (baseline) o 'logreg' (candidato)."
+    ),
+    features_path: Path = typer.Option(
+        PROCESSED_DATA_DIR / "features_estacion_hora.parquet",
+        help="Features estacion x hora (se generan con python -m mibici.features).",
+    ),
+    model_path: Path = typer.Option(MODELS_DIR / "model_p2.pkl", help="Modelo P2."),
+):
+    """Clasificacion (P2): la estacion quedara vacia o saturada en las proximas horas?
+
+    La etiqueta es el proxy de riesgo de features.add_risk_label
+    (ver references/proxy_riesgo_p2.md). Se usa el split temporal de config.py:
+    se entrena con train (2023-05..2024-12) y se evalua con test (2025-07..2026-09).
+    """
+    from mibici.features import add_risk_label
+    from mibici.modeling.regression import FEATURES
+    from mibici.modeling.tracking import data_params, run_tags, split_params
+
     logger.info(f"Iniciando P2 con modelo - {model_name}")
-    mlflow.set_experiment(EXPERIMENT_NAME) # NOMBRE DEL EXPERIMENTO
+    if model_name == "dummy":
+        model = DummyClassifier(strategy="most_frequent")
+    elif model_name == "logreg":
+        model = make_pipeline(
+            StandardScaler(),
+            LogisticRegression(class_weight="balanced", random_state=SEED, max_iter=1000),
+        )
+    else:
+        raise ValueError(f"Modelo no valido: {model_name}. Usar 'dummy' o 'logreg'.")
+
+    if not features_path.exists():
+        raise FileNotFoundError(f"Falta {features_path}. Corre antes: python -m mibici.features")
+
+    columnas = ["estacion_id", "salidas", "llegadas", "split"] + FEATURES
+    df = pd.read_parquet(features_path, columns=columnas)
+    # La etiqueta va antes del dropna: necesita las 3 horas siguientes de cada estacion
+    df = add_risk_label(df)
+    df = df.dropna(subset=FEATURES + ["riesgo"])
+
+    train = df[df["split"] == "train"]
+    test = df[df["split"] == "test"]
+    X_train, y_train = train[FEATURES], train["riesgo"].astype(int)
+    X_test, y_test = test[FEATURES], test["riesgo"].astype(int)
+    logger.info(
+        f"P2 train={len(train):,} filas ({y_train.mean():.2%} en riesgo) | "
+        f"test={len(test):,} filas ({y_test.mean():.2%} en riesgo)"
+    )
+
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    y_prob = model.predict_proba(X_test)[:, 1]
+    metricas = {
+        "test_precision": precision_score(y_test, y_pred, zero_division=0),
+        "test_recall": recall_score(y_test, y_pred, zero_division=0),
+        "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
+        "test_roc_auc": roc_auc_score(y_test, y_prob),
+    }
+    logger.success(" | ".join(f"{k}={v:.3f}" for k, v in metricas.items()))
 
     run_name = "P2-baseline-dummy" if model_name == "dummy" else "P2-candidato-logreg"
-
-    # Obtenemos commit
-    import subprocess
-    try:
-        git_commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).strip().decode("utf-8")
-    except Exception:
-        git_commit = "unknown"
-    
-    with mlflow.start_run(run_name=run_name) as run:
-        mlflow.set_tag("equipo", "01")
-        mlflow.set_tag("pregunta", "P2")
-        mlflow.set_tag("git_commit", git_commit)
-                
-        logger.info(f"Cargando características procesadas para P2 desde: {features_path}")
-        if features_path.exists():
-            df = pd.read_parquet(features_path)
-            logger.success(f"Características reales con dimensiones: {df.shape}")
-        else:
-            logger.error(f"No se encontró el archivo en {features_path}. Asegurate de ejecutar el pipeline")
-            raise FileNotFoundError(f"Falta el archivo {features_path}")
-
-        np.random.seed(SEED)
-        n_samples = 1000
-        df = pd.DataFrame({
-            "origen_id": np.random.randint(1, 100, n_samples),
-            "hora": np.random.randint(0, 24, n_samples),
-            "viajes_salida_hora": np.random.randint(0, 25, n_samples),
-            "capacidad_estacion": 20})
-
-        # Aplicamos la etiqueta de risk
-        df, y = add_risk_label(df)
-        X = df.drop(columns=["riesgo", "origen_id"], errors="ignore")
-        logger.success("Datos de P2 listos para el entrenamiento.")
-    
-        # Test 20% Train 80%
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=SEED)
-
-        # De acuerdo al modelo seleccionado 
-        if model_name == "dummy":
-            logger.info("Configurando Modelo DummyClassifier")
-            model = DummyClassifier(strategy="most_frequent")
-        elif model_name == "logreg":
-            logger.info("Configurando Modelo LogisticRegression")
-            model = LogisticRegression(class_weight="balanced", random_state=SEED, max_iter=1000)
-        else:
-            raise ValueError(f"Modelo no OK {model_name}. Usar 'dummy' o 'logreg'.")
-
-        # Entrenando
-        logger.info("Entrenando modelo")
-        model.fit(X_train, y_train)
-
-        # Predicciones
-        y_pred = model.predict(X_test)
-        if hasattr(model, "predict_proba"):
-            y_prob = model.predict_proba(X_test)[:, 1]
-            roc = roc_auc_score(y_test, y_prob)
-        else:
-            roc = 0.0
-
-        precision = precision_score(y_test, y_pred, zero_division=0)
-        recall = recall_score(y_test, y_pred, zero_division=0)
-        f1_macro = f1_score(y_test, y_pred, average="macro", zero_division=0)
-        # ROC en la parte de arriba
-        
-        logger.success(f"Métricas P2 -> Precision: {precision:.2f} | Recall: {recall:.2f} | F1: {f1_macro:.2f} | ROC-AUC: {roc:.2f}")
-
-        # Configuración de MlFlow
-        mlflow.log_param("modelo", model_name)
-        mlflow.log_param("test_size", 0.2)
-        mlflow.log_param("random_state", SEED)
-        
-        mlflow.log_metric("test_precision", precision)
-        mlflow.log_metric("test_recall", recall)
-        mlflow.log_metric("test_f1_macro", f1_macro)
-        mlflow.log_metric("test_roc_auc", roc)
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    with mlflow.start_run(run_name=run_name):
+        mlflow.set_tags(run_tags("P2"))
+        mlflow.log_params(split_params())
+        mlflow.log_params(data_params())
+        mlflow.log_params(
+            {
+                "modelo": model_name,
+                "random_state": SEED,
+                "risk_horizon_hours": RISK_HORIZON_HOURS,
+                "risk_alpha": RISK_ALPHA,
+            }
+        )
+        mlflow.log_metrics(metricas)
 
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         joblib.dump(model, model_path)
-        mlflow.log_artifact(str(model_path), artifact_path="modelo serializado")
+        mlflow.log_artifact(str(model_path), artifact_path="model")
 
-        # Artefacto
         FIGURES_DIR.mkdir(parents=True, exist_ok=True)
         plt.figure(figsize=(6, 6))
-        sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
-        plt.title(f"Matriz de Confusión - P2 ({model_name.upper()})")
-        plt.xlabel("Predicción del Riesgo")
+        sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt="d", cmap="Blues")
+        plt.title(f"Matriz de Confusion - P2 ({model_name.upper()})")
+        plt.xlabel("Prediccion del Riesgo")
         plt.ylabel("Riesgo Real")
-        
         artifact_path = FIGURES_DIR / f"matriz_confusion_p2_{model_name}.png"
         plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
         mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
         plt.close()
 
-        logger.success("P2 FIN")
+    logger.success("P2 FIN")
 
 
 @app.command()
