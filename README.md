@@ -110,10 +110,15 @@ En un clon nuevo MLflow arranca vacío: `mlflow.db` y `mlruns/` no se versionan,
   python -m mibici.modeling.train p2 --model-name dummy
   python -m mibici.modeling.train p2 --model-name logreg
   ```
-- **P3 (Clustering)** — baseline (K-Means con inicialización aleatoria):
+- **P3 (Clustering)** — baseline (K-Means con inicialización aleatoria). El pipeline completo es de tres pasos:
   ```bash
-  python mibici/modeling/train.py p3
+  python -m mibici.modeling.train p3    # entrena K-Means (k=5) y lo serializa en models/kmeans_p3.pkl
+  python -m mibici.modeling.predict p3  # asigna clústeres y escribe reports/p3_evaluation_summary.txt
+  python -m mibici.reportes_p3          # regenera el summary y las figuras de P3 desde los datos
   ```
+  El tercer comando (`mibici/reportes_p3`) reconstruye `reports/p3_evaluation_summary.txt`,
+  `reports/figures/p3_distribucion_clusters.png` y `reports/figures/p3_mapa_geografico.png`
+  sin depender de binarios versionados, así el reporte es reproducible en un clon limpio.
 
 Las capturas de pantalla de los *runs*, artefactos y comparación de modelos se encuentran en:
 ```text
@@ -159,6 +164,7 @@ reports/figures/mlflow_evidencia/
 │   ├── modeling
 │   │   ├── train.py       <- Entrenamiento P1/P2/P3
 │   │   └── predict.py     <- Inferencia
+│   ├── reportes_p3.py     <- Regenera summary y figuras de P3 sin binarios
 │   └── plots.py           <- Visualizaciones
 │
 └── tests              <- Pruebas (pytest)
