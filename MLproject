@@ -1,0 +1,79 @@
+# MLflow Project — MiBici · Equipo 01 (issue #61, meta A2)
+#
+# Entorno declarado en python_env.yaml (#60), con las mismas versiones fijadas
+# de requirements.txt: `mlflow run` crea un virtualenv aislado con él.
+#
+# Los defaults de rutas, fechas y semilla NO se repiten aquí: viven en
+# mibici/config.py y los aplica cada módulo (dataset.py, features.py,
+# modeling/train.py). Solo se parametriza lo que cambia entre corridas.
+#
+# Uso (ver README → sección "Experimentos (MLflow)"):
+#   mlflow run . -e ingest
+#   mlflow run . -e features
+#   mlflow run . -e train -P question=p1 -P model=rf -P n_estimators=300
+#
+# Nota sobre experimentos: `mlflow run` crea un run antes de ejecutar el entry
+# point. Se recomienda añadir `--experiment-name mibici-equipo01` para que ese
+# run nazca directamente en el experimento del equipo; si no se pasa,
+# mibici/mlflow_entry.py lo reconcilia igualmente (ver _reconciliar_experimento).
+name: mibici-equipo01
+
+python_env: python_env.yaml
+
+entry_points:
+  # ---------------------------------------------------------------------------
+  # ingest — descarga, normaliza y unifica el histórico de viajes (dataset.py)
+  # ---------------------------------------------------------------------------
+  ingest:
+    parameters:
+      force:
+        type: string
+        default: "false"
+      skip_download:
+        type: string
+        default: "false"
+      limit:
+        type: string
+        default: ""
+    command: >
+      python -m mibici.mlflow_entry ingest
+      --force {force} --skip-download {skip_download} --limit {limit}
+
+  # ---------------------------------------------------------------------------
+  # features — features estación x hora (features.py); las requieren P1 y P2
+  # ---------------------------------------------------------------------------
+  features:
+    command: python -m mibici.mlflow_entry features
+
+  # ---------------------------------------------------------------------------
+  # train — entrenamiento + registro de artefactos (modeling/train.py)
+  #   question: p1 | p2 | p3   (default p1)
+  #   model:    variante por pregunta; vacío = baseline de esa pregunta
+  #             p1: ridge | rf          p2: dummy | logreg   p3: random | k-means++
+  #   hiperparámetros solo aplican a su pregunta (los demás se ignoran)
+  # ---------------------------------------------------------------------------
+  train:
+    parameters:
+      question:
+        type: string
+        default: p1
+      model:
+        type: string
+        default: ""
+      n_estimators:
+        type: int
+        default: 100
+      rf_max_samples:
+        type: int
+        default: 500000
+      n_clusters:
+        type: int
+        default: 5
+      n_init:
+        type: int
+        default: 1
+    command: >
+      python -m mibici.mlflow_entry train
+      --question {question} --model {model}
+      --n-estimators {n_estimators} --rf-max-samples {rf_max_samples}
+      --n-clusters {n_clusters} --n-init {n_init}
