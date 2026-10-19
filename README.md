@@ -91,11 +91,24 @@ Esta etapa evalúa y predice si una estación se encuentra en riesgo de desabast
 
 ## Experimentos (MLflow)
 
+### Servidor de tracking
+
+El Model Registry necesita un almacenamiento respaldado por base de datos, así que el tracking se levanta con un servidor local sobre SQLite:
+
 ```bash
-mlflow ui                             # UI en http://127.0.0.1:5000
+mlflow server --backend-store-uri sqlite:///mlflow.db --port 5000
+# UI en http://127.0.0.1:5000
 ```
 
-En un clon nuevo MLflow arranca vacío: `mlflow.db` y `mlruns/` no se versionan, así que los runs se regeneran con los comandos de esta sección (las capturas de evidencia están en `reports/figures/mlflow_evidencia/`).
+En otra terminal (o antes de lanzar cualquier corrida), apunta la variable de entorno al servidor para que todos los runs se registren ahí:
+
+```bash
+export MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
+```
+
+Puedes persistirla en `.env` (no se versiona) para no repetirla en cada sesión. Todas las corridas de esta entrega se lanzan con `mlflow run`, no desde un notebook.
+
+> `mlflow.db` y `mlruns/` **no se versionan** (están en `.gitignore`, junto con `mlartifacts/`, los datos MiBici y los modelos serializados). En un clon nuevo el tracking arranca vacío, así que los runs se regeneran con los comandos de esta sección (las capturas de evidencia están en `reports/figures/mlflow_evidencia/`).
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
