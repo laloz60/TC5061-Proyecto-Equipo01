@@ -61,7 +61,7 @@ def load_p1_data(features_path):
     return train, val, test
 
 
-def build_model(kind, rf_max_samples=500_000):
+def build_model(kind, rf_max_samples=500_000, n_estimators=100):
     if kind == "ridge":
         # la hora y el dia van en one-hot porque su efecto no es lineal
         preprocesamiento = ColumnTransformer(
@@ -75,7 +75,7 @@ def build_model(kind, rf_max_samples=500_000):
     if kind == "rf":
         # max_samples limita las filas por arbol para que no tarde tanto
         rf = RandomForestRegressor(
-            n_estimators=100,
+            n_estimators=n_estimators,
             max_depth=16,
             min_samples_leaf=20,
             max_samples=rf_max_samples,
@@ -128,11 +128,11 @@ def plot_predictions(y_real, y_pred, titulo, path):
     plt.close(fig)
 
 
-def train_p1(features_path: Path, kind="ridge", rf_max_samples=500_000):
+def train_p1(features_path: Path, kind="ridge", rf_max_samples=500_000, n_estimators=100):
     train, val, test = load_p1_data(features_path)
     logger.info(f"train={len(train):,} val={len(val):,} test={len(test):,}")
 
-    model = build_model(kind, rf_max_samples)
+    model = build_model(kind, rf_max_samples, n_estimators)
     logger.info(f"Entrenando {kind}...")
     model.fit(train[FEATURES], train[TARGET])
 
@@ -169,7 +169,7 @@ def train_p1(features_path: Path, kind="ridge", rf_max_samples=500_000):
     if kind == "ridge":
         params["alpha"] = 1.0
     else:
-        params["n_estimators"] = 100
+        params["n_estimators"] = n_estimators
         params["max_depth"] = 16
         params["min_samples_leaf"] = 20
         params["max_samples"] = rf_max_samples

@@ -1,0 +1,48 @@
+name: mibici-equipo01
+
+python_env: python_env.yaml
+
+entry_points:
+  ingest:
+    parameters:
+      force:
+        type: string
+        default: "false"
+      skip_download:
+        type: string
+        default: "false"
+      limit:
+        type: string
+        default: ""
+    command: >
+      python -m mibici.mlflow_entry ingest
+      --force {force} --skip-download {skip_download} --limit {limit}
+
+  features:
+    command: python -m mibici.mlflow_entry features
+
+  train:
+    parameters:
+      question:
+        type: string
+        default: p1
+      model:
+        type: string
+        default: ""
+      n_estimators:
+        type: int
+        default: 100
+      rf_max_samples:
+        type: int
+        default: 500000
+      n_clusters:
+        type: int
+        default: 5
+      n_init:
+        type: int
+        default: 1
+    command: >
+      python -m mibici.mlflow_entry train
+      --question {question} --model {model}
+      --n-estimators {n_estimators} --rf-max-samples {rf_max_samples}
+      --n-clusters {n_clusters} --n-init {n_init}

@@ -261,12 +261,18 @@ def train_p1(
         None, help="Features estación x hora (parquet de features.py)."
     ),
     rf_max_samples: int = typer.Option(500_000, help="Filas por árbol del RandomForest."),
+    n_estimators: int = typer.Option(100, help="RandomForest: número de árboles (rf)."),
 ):
     """Entrena P1 (Regresión) y lo compara contra el baseline de 4 semanas."""
     from mibici.features import FEATURES_PATH
     from mibici.modeling.regression import train_p1 as entrenar_p1
 
-    entrenar_p1(features_path or FEATURES_PATH, kind=model, rf_max_samples=rf_max_samples)
+    entrenar_p1(
+        features_path or FEATURES_PATH,
+        kind=model,
+        rf_max_samples=rf_max_samples,
+        n_estimators=n_estimators,
+    )
 
 @app.command("p2")
 def train_p2(
