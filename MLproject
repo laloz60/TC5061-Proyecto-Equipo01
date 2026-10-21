@@ -46,3 +46,6 @@ entry_points:
       --question {question} --model {model}
       --n-estimators {n_estimators} --rf-max-samples {rf_max_samples}
       --n-clusters {n_clusters} --n-init {n_init}
+
+  register:
+    command: python -m mibici.modeling.register
