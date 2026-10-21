@@ -299,10 +299,50 @@ def train_p2(
     if model_name == "dummy":
         model = DummyClassifier(strategy="most_frequent")
     elif model_name == "logreg":
-        model = make_pipeline(
-            StandardScaler(),
-            LogisticRegression(class_weight="balanced", random_state=SEED, max_iter=1000),
-        )
+        with mlflow.start_run(run_name="P2-parent-search-logreg") as parent_run:
+            parent_tags = run_tags("P2")
+            parent_tags.update({"model_family": "logreg", "stage_of_work": "search"})
+            mlflow.set_tags(parent_tags)
+            mlflow.log_params(split_params())
+            mlflow.log_params(data_params())
+
+            C_values = [0.1, 1.0, 10.0]
+            mejor_f1 = -1
+            mejor_modelo = None
+            mejor_met = {}
+
+            for c_val in C_values:
+                with mlflow.start_run(run_name=f"p2-child-logreg-C{c_val}", nested=True) as child_run:
+                    child_tags = run_tags("P2")
+                    child_tags.update({"model_family": "logreg", "stage_of_work": "candidate"})
+                    mlflow.set_tags(child_tags)
+                    
+                    sub_model = make_pipeline(
+                        StandardScaler(),
+                        LogisticRegression(C=c_val, class_weight="balanced", random_state=SEED, max_iter=1000),
+                    )
+                    sub_model.fit(X_train, y_train)
+                    y_pred = sub_model.predict(X_test)
+                    y_prob = sub_model.predict_proba(X_test)[:, 1]
+                    
+                    child_metrics = {
+                        "test_precision": precision_score(y_test, y_pred, zero_division=0),
+                        "test_recall": recall_score(y_test, y_pred, zero_division=0),
+                        "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
+                        "test_roc_auc": roc_auc_score(y_test, y_prob),
+                    }
+                    mlflow.log_param("C", c_val)
+                    mlflow.log_metrics(child_metrics)
+
+                    if child_metrics["test_f1_macro"] > mejor_f1:
+                        mejor_f1 = child_metrics["test_f1_macro"]
+                        mejor_modelo = sub_model
+                        mejor_met = child_metrics
+
+            mlflow.log_metrics(mejor_met)
+            MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            joblib.dump(mejor_modelo, model_path)
+            mlflow.log_artifact(str(model_path), artifact_path="model")
     else:
         raise ValueError(f"Modelo no valido: {model_name}. Usar 'dummy' o 'logreg'.")
 
