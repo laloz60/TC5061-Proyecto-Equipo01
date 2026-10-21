@@ -253,6 +253,121 @@ def train_p3(
     trainer = KMeansClusterTrainer(n_clusters=n_clusters, init_method=init_method, n_init=n_init)
     trainer.run_pipeline(input_path=input_path, model_path=model_path)
 
+@app.command("p3-search")
+def train_p3_search(
+    n_clusters_list: str = typer.Option("3,4,5,6", help="Valores de K separados por comas"),
+    input_path: Path = typer.Option(NOMENCLATURA_PARQUET_PATH, help="Ruta de nomenclatura."),):
+    """P3 usando Nested Runs y artefactos MLflow"""
+
+    from mibici.config import FIGURES_DIR, MODELS_DIR
+    from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
+    from sklearn.metrics import silhouette_score
+    import matplotlib.pyplot as plt
+    import joblib
+    from mlflow.models import infer_signature
+    import json
+    
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    
+    # TRAINER
+    trainer = KMeansClusterTrainer(n_clusters=5, init_method="k-means++", n_init=10)
+    X_profiles, lats, lons = trainer.load_data(input_path)
+    
+    # CORRIDA PADRE
+    with mlflow.start_run(run_name="p3-parent-search-kmeans") as parent_run:
+        mlflow.set_tags(run_tags("P3"))
+        mlflow.set_tag("stage_of_work", "search")
+        mlflow.set_tag("model_family", "kmeans")
+        mlflow.log_params(split_params())
+        mlflow.log_params(data_params())
+        
+        k_values = [int(k.strip()) for k in n_clusters_list.split(",")]
+        
+        # CORRIDAS HIJAS ITERADAS
+        for k in k_values:
+            with mlflow.start_run(run_name=f"p3-candidate-k{k}", nested=True) as child_run:
+                # ACTUAL CANDIDADTO
+                kmeans_model, labels = KMeansClusterTrainer(
+                    n_clusters=k, init_method="k-means++", n_init=10
+                ).train_model(X_profiles)
+                
+                sil_score = silhouette_score(X_profiles, labels)
+                
+                # Registramos parámetros y métricas
+                mlflow.log_param("model_type", "KMeans")
+                mlflow.log_param("n_clusters", k)
+                mlflow.log_param("init_method", "k-means++")
+                mlflow.log_param("n_init", 10)
+                mlflow.log_metric("test_silhouette_score", sil_score)
+                
+                # Etiquetas obligatorias
+                mlflow.set_tags(run_tags("P3"))
+                mlflow.set_tag("stage_of_work", "candidate")
+                mlflow.set_tag("model_family", "kmeans")
+
+                # Firma
+                signature = infer_signature(X_profiles, labels)
+                input_example = X_profiles[:5]
+
+                # Carpeta de datos
+                signature_dir = MODELS_DIR / f"signature_metadata_k{k}"
+                signature_dir.mkdir(parents=True, exist_ok=True)
+
+                # Guardado en JSON ENTRADA Y SALIDA
+                sig_path = signature_dir / "signature.json"
+                with open(sig_path, "w", encoding="utf-8") as f:
+                    json.dump(signature.to_dict(), f, indent=4)
+
+                ex_path = signature_dir / "input_example.json"
+                with open(ex_path, "w", encoding="utf-8") as f:
+                    json.dump(input_example.tolist(), f)
+
+                mlflow.log_artifacts(str(signature_dir), artifact_path="model_signature")
+
+                mlflow.sklearn.log_model(sk_model=kmeans_model, name="model",
+                    signature=signature, input_example=input_example)
+                
+                # FIGURAS
+                FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+                
+                # 1. Mapa
+                fig, ax = plt.subplots(figsize=(8, 6))
+                scatter = ax.scatter(lons, lats, c=labels, cmap="viridis", s=50, alpha=0.8)
+                ax.set_title(f"Mapa Geográfico - P3 (K={k})")
+                ax.set_xlabel("Longitud")
+                ax.set_ylabel("Latitud")
+                plt.colorbar(scatter, label="Clúster")
+                map_path = FIGURES_DIR / f"p3_mapa_geografico_k{k}.png"
+                plt.savefig(map_path, dpi=300, bbox_inches="tight")
+                plt.close(fig)
+
+                # 2. Distribución de estaciones
+                fig, ax = plt.subplots(figsize=(8, 5))
+                unique_clusters, counts = np.unique(labels, return_counts=True)
+                ax.bar(unique_clusters, counts, color="skyblue", edgecolor="black")
+                ax.set_title(f"Distribución de Estaciones por Clúster - P3 (K={k})")
+                ax.set_xlabel("Clúster")
+                ax.set_ylabel("Número de Estaciones")
+                dist_path = FIGURES_DIR / f"p3_distribucion_clusters_k{k}.png"
+                plt.savefig(dist_path, dpi=300, bbox_inches="tight")
+                plt.close(fig)
+
+                # 3. Clústeres combinados
+                fig, ax = plt.subplots(figsize=(8, 6))
+                ax.scatter(lons, lats, c=labels, cmap="tab10", s=40, alpha=0.7)
+                ax.set_title(f"Clustering de Estaciones MiBici - P3 (K={k})")
+                ax.set_xlabel("Longitud")
+                ax.set_ylabel("Latitud")
+                clusters_path = FIGURES_DIR / f"p3_clusters_map_k{k}.png"
+                plt.savefig(clusters_path, dpi=300, bbox_inches="tight")
+                plt.close(fig)
+
+                
+                mlflow.log_artifact(str(map_path), artifact_path="clustering_artifacts")
+                mlflow.log_artifact(str(dist_path), artifact_path="clustering_artifacts")
+                mlflow.log_artifact(str(clusters_path), artifact_path="clustering_artifacts")
+                
+                logger.success(f"Nested run y artefactos guardados para K={k} con Silhouette: {sil_score:.4f}")
 
 @app.command("p1")
 def train_p1(
