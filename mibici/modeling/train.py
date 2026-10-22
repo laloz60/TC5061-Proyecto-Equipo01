@@ -16,11 +16,13 @@ import joblib
 from loguru import logger
 import matplotlib.pyplot as plt
 import mlflow
+from mlflow.models import infer_signature
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from sklearn.cluster import KMeans
+from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     confusion_matrix,
@@ -30,11 +32,14 @@ from sklearn.metrics import (
     roc_auc_score,
     silhouette_score,
 )
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 import typer
 
 from mibici.config import (
     FIGURES_DIR,
+    MANIFEST_PATH,
     MODELS_DIR,
     NOMENCLATURA_PARQUET_PATH,
     PROCESSED_DATA_DIR,
@@ -42,17 +47,6 @@ from mibici.config import (
     RISK_HORIZON_HOURS,
     SEED,
 )
-
-import mlflow
-import mlflow.sklearn
-from mlflow.models import infer_signature
-from mibici.config import MANIFEST_PATH
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix, f1_score, precision_score, recall_score
-import seaborn as sns
-from sklearn.dummy import DummyClassifier
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 
 # Inicialización de la aplicación CLI
 app = typer.Typer(help="CLI modular para el entrenamiento de modelos de Machine Learning - MiBici")
@@ -177,7 +171,6 @@ class KMeansClusterTrainer(BaseTrainer):
         model_path: Path,
     ):
         """Calcula el Silhouette Score, serializa el modelo y registra artefactos y trazabilidad completa en MLflow."""
-        from mlflow.models import infer_signature
 
         from mibici.modeling.tracking import data_params, run_tags, split_params
 
@@ -285,13 +278,13 @@ def train_p3_search(
     input_path: Path = typer.Option(NOMENCLATURA_PARQUET_PATH, help="Ruta de nomenclatura."),):
     """P3 usando Nested Runs y artefactos MLflow"""
 
+    import json
+
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import silhouette_score
+
     from mibici.config import FIGURES_DIR, MODELS_DIR
     from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
-    from sklearn.metrics import silhouette_score
-    import matplotlib.pyplot as plt
-    import joblib
-    from mlflow.models import infer_signature
-    import json
     
     mlflow.set_experiment(EXPERIMENT_NAME)
     
@@ -300,7 +293,7 @@ def train_p3_search(
     X_profiles, lats, lons = trainer.load_data(input_path)
     
     # CORRIDA PADRE
-    with mlflow.start_run(run_name="p3-parent-search-kmeans") as parent_run:
+    with mlflow.start_run(run_name="p3-parent-search-kmeans"):
         mlflow.set_tags(run_tags("P3"))
         mlflow.set_tag("stage_of_work", "search")
         mlflow.set_tag("model_family", "kmeans")
@@ -311,7 +304,7 @@ def train_p3_search(
         
         # CORRIDAS HIJAS ITERADAS
         for k in k_values:
-            with mlflow.start_run(run_name=f"p3-candidate-k{k}", nested=True) as child_run:
+            with mlflow.start_run(run_name=f"p3-candidate-k{k}", nested=True):
                 # ACTUAL CANDIDADTO
                 kmeans_model, labels = KMeansClusterTrainer(
                     n_clusters=k, init_method="k-means++", n_init=10
@@ -421,12 +414,18 @@ def train_p1_search(
     features_path: Path = typer.Option(PROCESSED_DATA_DIR / "features_estacion_hora.parquet", help="Features estación x hora."),):
 
     """P1"""
-    from mibici.modeling.regression import load_p1_data, build_model, regression_metrics, TARGET, FEATURES
-    from mibici.config import FIGURES_DIR, MODELS_DIR
-    from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
-    from mlflow.models import infer_signature
     import json
     import warnings
+
+    from mibici.config import FIGURES_DIR, MODELS_DIR
+    from mibici.modeling.regression import (
+        FEATURES,
+        TARGET,
+        build_model,
+        load_p1_data,
+        regression_metrics,
+    )
+    from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
 
     warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.utils.parallel") # Ignorar la advertencia
     mlflow.set_experiment(EXPERIMENT_NAME)
@@ -445,7 +444,7 @@ def train_p1_search(
     estimators_values = [int(n.strip()) for n in n_estimators_list.split(",")]
 
     # Padre
-    with mlflow.start_run(run_name="p1-parent-search-rf") as parent_run:
+    with mlflow.start_run(run_name="p1-parent-search-rf"):
         mlflow.set_tags(run_tags("P1"))
         mlflow.set_tag("stage_of_work", "search")
         mlflow.set_tag("model_family", "random_forest")
@@ -454,7 +453,7 @@ def train_p1_search(
         
         # Hijas iteradas
         for n_est in estimators_values:
-            with mlflow.start_run(run_name=f"p1-candidate-rf-n{n_est}", nested=True) as child_run:
+            with mlflow.start_run(run_name=f"p1-candidate-rf-n{n_est}", nested=True):
                 
                 model = build_model("rf", n_estimators=n_est)
                 logger.info(f"Entrenando candidato RF con n_estimators={n_est}...")
@@ -554,11 +553,10 @@ def train_p2(
     se entrena con train (2023-05..2024-12), se valida con val (2025-01..2025-06)
     y se evalua con test (2025-07..2026-09).
     """
+    from mibici.config import MANIFEST_PATH
     from mibici.features import add_risk_label
     from mibici.modeling.regression import FEATURES
     from mibici.modeling.tracking import data_params, run_tags, split_params
-    from mlflow.models import infer_signature
-    from mibici.config import MANIFEST_PATH
 
     logger.info(f"Iniciando P2 con modelo - {model_name}")
     if not features_path.exists():
@@ -638,7 +636,7 @@ def train_p2(
 
     elif model_name == "logreg":
         # Búsqueda organizada como Nested Runs con selección en VALIDACIÓN (Evita fuga en test)
-        with mlflow.start_run(run_name="P2-parent-search-logreg") as parent_run:
+        with mlflow.start_run(run_name="P2-parent-search-logreg"):
             parent_tags = run_tags("P2")
             parent_tags.update({"model_family": "logreg", "stage_of_work": "search"})
             mlflow.set_tags(parent_tags)
@@ -656,7 +654,7 @@ def train_p2(
             mejor_C = None
 
             for c_val in C_values:
-                with mlflow.start_run(run_name=f"p2-child-logreg-C{c_val}", nested=True) as child_run:
+                with mlflow.start_run(run_name=f"p2-child-logreg-C{c_val}", nested=True):
                     child_tags = run_tags("P2")
                     child_tags.update({"model_family": "logreg", "stage_of_work": "candidate"})
                     mlflow.set_tags(child_tags)
