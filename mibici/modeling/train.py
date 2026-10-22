@@ -45,6 +45,8 @@ from mibici.config import (
 
 import mlflow
 import mlflow.sklearn
+from mlflow.models import infer_signature
+from mibici.config import MANIFEST_PATH
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix, f1_score, precision_score, recall_score
 import seaborn as sns
@@ -202,6 +204,22 @@ class KMeansClusterTrainer(BaseTrainer):
             sil_score = silhouette_score(X_profiles, labels)
             mlflow.log_metric("test_silhouette_score", sil_score)
             logger.success(f"Evaluación P3 completada. Silhouette Score: {sil_score:.4f}")
+
+            signature = infer_signature(X_profiles, labels)
+            mlflow.sklearn.log_model(
+                kmeans_model, 
+                artifact_path="model", 
+                signature=signature, 
+                input_example=X_profiles[:5]
+            )
+
+            if MANIFEST_PATH.exists():
+                dataset_source = mlflow.data.from_pandas(
+                    pd.DataFrame(X_profiles), 
+                    source=str(MANIFEST_PATH), 
+                    name="mibici_p3_profiles"
+                )
+                mlflow.log_input(dataset_source, context="clustering_training")
 
             # Serialización y guardado del modelo en MODELS_DIR
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -533,82 +551,188 @@ def train_p2(
 
     La etiqueta es el proxy de riesgo de features.add_risk_label
     (ver references/proxy_riesgo_p2.md). Se usa el split temporal de config.py:
-    se entrena con train (2023-05..2024-12) y se evalua con test (2025-07..2026-09).
+    se entrena con train (2023-05..2024-12), se valida con val (2025-01..2025-06)
+    y se evalua con test (2025-07..2026-09).
     """
     from mibici.features import add_risk_label
     from mibici.modeling.regression import FEATURES
     from mibici.modeling.tracking import data_params, run_tags, split_params
+    from mlflow.models import infer_signature
+    from mibici.config import MANIFEST_PATH
 
     logger.info(f"Iniciando P2 con modelo - {model_name}")
-    if model_name == "dummy":
-        model = DummyClassifier(strategy="most_frequent")
-    elif model_name == "logreg":
-        model = make_pipeline(
-            StandardScaler(),
-            LogisticRegression(class_weight="balanced", random_state=SEED, max_iter=1000),
-        )
-    else:
-        raise ValueError(f"Modelo no valido: {model_name}. Usar 'dummy' o 'logreg'.")
-
     if not features_path.exists():
         raise FileNotFoundError(f"Falta {features_path}. Corre antes: python -m mibici.features")
 
     columnas = ["estacion_id", "salidas", "llegadas", "split"] + FEATURES
     df = pd.read_parquet(features_path, columns=columnas)
+    
     # La etiqueta va antes del dropna: necesita las 3 horas siguientes de cada estacion
     df = add_risk_label(df)
     df = df.dropna(subset=FEATURES + ["riesgo"])
 
     train = df[df["split"] == "train"]
+    val = df[df["split"] == "val"]
     test = df[df["split"] == "test"]
+    
     X_train, y_train = train[FEATURES], train["riesgo"].astype(int)
+    X_val, y_val = val[FEATURES], val["riesgo"].astype(int)
     X_test, y_test = test[FEATURES], test["riesgo"].astype(int)
+
     logger.info(
         f"P2 train={len(train):,} filas ({y_train.mean():.2%} en riesgo) | "
+        f"val={len(val):,} filas ({y_val.mean():.2%} en riesgo) | "
         f"test={len(test):,} filas ({y_test.mean():.2%} en riesgo)"
     )
 
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
-    metricas = {
-        "test_precision": precision_score(y_test, y_pred, zero_division=0),
-        "test_recall": recall_score(y_test, y_pred, zero_division=0),
-        "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
-        "test_roc_auc": roc_auc_score(y_test, y_prob),
-    }
-    logger.success(" | ".join(f"{k}={v:.3f}" for k, v in metricas.items()))
-
-    run_name = "P2-baseline-dummy" if model_name == "dummy" else "P2-candidato-logreg"
     mlflow.set_experiment(EXPERIMENT_NAME)
-    with mlflow.start_run(run_name=run_name):
-        mlflow.set_tags(run_tags("P2"))
-        mlflow.log_params(split_params())
-        mlflow.log_params(data_params())
-        mlflow.log_params(
-            {
+
+    if model_name == "dummy":
+        model = DummyClassifier(strategy="most_frequent")
+        run_name = "P2-baseline-dummy"
+        with mlflow.start_run(run_name=run_name):
+            tags = run_tags("P2")
+            tags.update({"model_family": "dummy", "stage_of_work": "baseline"})
+            mlflow.set_tags(tags)
+            mlflow.log_params(split_params())
+            mlflow.log_params(data_params())
+            mlflow.log_params({
                 "modelo": model_name,
                 "random_state": SEED,
                 "risk_horizon_hours": RISK_HORIZON_HOURS,
                 "risk_alpha": RISK_ALPHA,
+            })
+            
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            
+            metricas = {
+                "test_precision": precision_score(y_test, y_pred, zero_division=0),
+                "test_recall": recall_score(y_test, y_pred, zero_division=0),
+                "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
+                "test_roc_auc": 0.5,
             }
-        )
-        mlflow.log_metrics(metricas)
+            mlflow.log_metrics(metricas)
+            
+            signature = infer_signature(X_test, y_pred)
+            mlflow.sklearn.log_model(model, artifact_path="model", signature=signature, input_example=X_test.head(5))
+            if MANIFEST_PATH.exists():
+                ds = mlflow.data.from_pandas(X_train, source=str(MANIFEST_PATH), name="mibici_p2_train")
+                mlflow.log_input(ds, context="training")
 
-        MODELS_DIR.mkdir(parents=True, exist_ok=True)
-        joblib.dump(model, model_path)
-        mlflow.log_artifact(str(model_path), artifact_path="model")
+            MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            joblib.dump(model, model_path)
+            mlflow.log_artifact(str(model_path), artifact_path="model")
 
-        FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-        plt.figure(figsize=(6, 6))
-        sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt="d", cmap="Blues")
-        plt.title(f"Matriz de Confusion - P2 ({model_name.upper()})")
-        plt.xlabel("Prediccion del Riesgo")
-        plt.ylabel("Riesgo Real")
-        artifact_path = FIGURES_DIR / f"matriz_confusion_p2_{model_name}.png"
-        plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
-        mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
-        plt.close()
+            # Matriz de confusión para dummy
+            FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+            plt.figure(figsize=(6, 6))
+            sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt="d", cmap="Blues")
+            plt.title("Matriz de Confusion - P2 (DUMMY)")
+            plt.xlabel("Prediccion del Riesgo")
+            plt.ylabel("Riesgo Real")
+            artifact_path = FIGURES_DIR / "matriz_confusion_p2_dummy.png"
+            plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
+            mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
+            plt.close()
+
+    elif model_name == "logreg":
+        # Búsqueda organizada como Nested Runs con selección en VALIDACIÓN (Evita fuga en test)
+        with mlflow.start_run(run_name="P2-parent-search-logreg") as parent_run:
+            parent_tags = run_tags("P2")
+            parent_tags.update({"model_family": "logreg", "stage_of_work": "search"})
+            mlflow.set_tags(parent_tags)
+            mlflow.log_params(split_params())
+            mlflow.log_params(data_params())
+            mlflow.log_params({
+                "modelo": model_name,
+                "random_state": SEED,
+                "risk_horizon_hours": RISK_HORIZON_HOURS,
+                "risk_alpha": RISK_ALPHA,
+            })
+
+            C_values = [0.1, 1.0, 10.0]
+            mejor_f1_val = -1
+            mejor_C = None
+
+            for c_val in C_values:
+                with mlflow.start_run(run_name=f"p2-child-logreg-C{c_val}", nested=True) as child_run:
+                    child_tags = run_tags("P2")
+                    child_tags.update({"model_family": "logreg", "stage_of_work": "candidate"})
+                    mlflow.set_tags(child_tags)
+                    
+                    sub_model = make_pipeline(
+                        StandardScaler(),
+                        LogisticRegression(C=c_val, class_weight="balanced", random_state=SEED, max_iter=1000),
+                    )
+                    sub_model.fit(X_train, y_train)
+                    
+                    # Evaluación en VALIDACIÓN para selección de hiperparámetros (sin fuga de test)
+                    y_val_pred = sub_model.predict(X_val)
+                    y_val_prob = sub_model.predict_proba(X_val)[:, 1]
+                    
+                    val_metrics = {
+                        "val_precision": precision_score(y_val, y_val_pred, zero_division=0),
+                        "val_recall": recall_score(y_val, y_val_pred, zero_division=0),
+                        "val_f1_macro": f1_score(y_val, y_val_pred, average="macro", zero_division=0),
+                        "val_roc_auc": roc_auc_score(y_val, y_val_prob),
+                    }
+                    mlflow.log_param("C", c_val)
+                    mlflow.log_metrics(val_metrics)
+
+                    if val_metrics["val_f1_macro"] > mejor_f1_val:
+                        mejor_f1_val = val_metrics["val_f1_macro"]
+                        mejor_C = c_val
+
+            # Entrenar modelo final con el mejor C encontrado en val, evaluando una sola vez en TEST
+            logger.info(f"Mejor C encontrado en validación: {mejor_C}")
+            mejor_modelo = make_pipeline(
+                StandardScaler(),
+                LogisticRegression(C=mejor_C, class_weight="balanced", random_state=SEED, max_iter=1000),
+            )
+            mejor_modelo.fit(X_train, y_train)
+            y_pred = mejor_modelo.predict(X_test)
+            y_prob = mejor_modelo.predict_proba(X_test)[:, 1]
+
+            test_metrics = {
+                "test_precision": precision_score(y_test, y_pred, zero_division=0),
+                "test_recall": recall_score(y_test, y_pred, zero_division=0),
+                "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
+                "test_roc_auc": roc_auc_score(y_test, y_prob),
+            }
+            mlflow.log_param("best_C", mejor_C)
+            mlflow.log_metrics(test_metrics)
+
+            signature = infer_signature(X_test, y_pred)
+            mlflow.sklearn.log_model(
+                mejor_modelo, 
+                artifact_path="model", 
+                signature=signature, 
+                input_example=X_test.head(5)
+            )
+            
+            if MANIFEST_PATH.exists():
+                ds = mlflow.data.from_pandas(X_train, source=str(MANIFEST_PATH), name="mibici_p2_train")
+                mlflow.log_input(ds, context="training")
+
+            MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            joblib.dump(mejor_modelo, model_path)
+            mlflow.log_artifact(str(model_path), artifact_path="model")
+            
+            FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+            plt.figure(figsize=(6, 6))
+            sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt="d", cmap="Blues")
+            plt.title("Matriz de Confusion - P2 (LOGREG OPTIMIZADO)")
+            plt.xlabel("Prediccion del Riesgo")
+            plt.ylabel("Riesgo Real")
+            artifact_path = FIGURES_DIR / "matriz_confusion_p2_logreg.png"
+            plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
+            mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
+            plt.close()
+
+            logger.success(f"Búsqueda nested runs P2 finalizada. Mejor F1 Macro en val: {mejor_f1_val:.3f}")
+    else:
+        raise ValueError(f"Modelo no valido: {model_name}. Usar 'dummy' o 'logreg'.")
 
     logger.success("P2 FIN")
 
