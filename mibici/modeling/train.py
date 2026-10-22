@@ -389,6 +389,127 @@ def train_p1(
         n_estimators=n_estimators,
     )
 
+@app.command("p1-search")
+def train_p1_search(
+    n_estimators_list: str = typer.Option("50,100,200", help="Valores de n_estimators separados por comas"),
+    features_path: Path = typer.Option(PROCESSED_DATA_DIR / "features_estacion_hora.parquet", help="Features estación x hora."),):
+
+    """P1"""
+    from mibici.modeling.regression import load_p1_data, build_model, regression_metrics, TARGET, FEATURES
+    from mibici.config import FIGURES_DIR, MODELS_DIR
+    from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
+    from mlflow.models import infer_signature
+    import json
+    import warnings
+
+    warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.utils.parallel") # Ignorar la advertencia
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    
+    train, _, _ = load_p1_data(features_path) # Cargar train
+    
+    df_full = pd.read_parquet(features_path)  # Cargar test
+    test_df = df_full[df_full["split"] == "test"].copy()
+
+    test_df[FEATURES] = test_df[FEATURES].fillna(0) # Rellena NAS
+    
+    y_real = test_df[TARGET].to_numpy()
+    
+    print(f"\nTest shape: {test_df.shape} | y_real min: {y_real.min()}, max: {y_real.max()}, mean: {y_real.mean():.2f}\n")
+
+    estimators_values = [int(n.strip()) for n in n_estimators_list.split(",")]
+
+    # Padre
+    with mlflow.start_run(run_name="p1-parent-search-rf") as parent_run:
+        mlflow.set_tags(run_tags("P1"))
+        mlflow.set_tag("stage_of_work", "search")
+        mlflow.set_tag("model_family", "random_forest")
+        mlflow.log_params(split_params())
+        mlflow.log_params(data_params())
+        
+        # Hijas iteradas
+        for n_est in estimators_values:
+            with mlflow.start_run(run_name=f"p1-candidate-rf-n{n_est}", nested=True) as child_run:
+                
+                model = build_model("rf", n_estimators=n_est)
+                logger.info(f"Entrenando candidato RF con n_estimators={n_est}...")
+                model.fit(train[FEATURES], train[TARGET])
+                
+                y_pred = model.predict(test_df[FEATURES])
+                y_pred = np.clip(y_pred, 0, None)
+                
+                metrics = regression_metrics(y_real, y_pred)
+                
+                mlflow.log_param("model_type", "RandomForestRegressor")
+                mlflow.log_param("n_estimators", n_est)
+                mlflow.log_param("max_depth", 16)
+                mlflow.log_param("min_samples_leaf", 20)
+                mlflow.log_metric("test_mae", metrics["mae"])
+                mlflow.log_metric("test_rmse", metrics["rmse"])
+                mlflow.log_metric("test_r2", metrics["r2"])
+                
+                mlflow.set_tags(run_tags("P1"))
+                mlflow.set_tag("stage_of_work", "candidate")
+                mlflow.set_tag("model_family", "random_forest")
+
+                signature = infer_signature(train[FEATURES], y_pred[:len(train[FEATURES])])
+                input_example = train[FEATURES].head(5)
+
+                signature_dir = MODELS_DIR / f"signature_metadata_rf_n{n_est}"
+                signature_dir.mkdir(parents=True, exist_ok=True)
+
+                with open(signature_dir / "signature.json", "w", encoding="utf-8") as f:
+                    json.dump(signature.to_dict(), f, indent=4)
+                with open(signature_dir / "input_example.json", "w", encoding="utf-8") as f:
+                    json.dump(input_example.values.tolist(), f)
+
+                mlflow.log_artifacts(str(signature_dir), artifact_path="model_signature")
+                mlflow.sklearn.log_model(
+                    sk_model=model,
+                    name="model",
+                    signature=signature,
+                    input_example=input_example,
+                    skops_trusted_types=["sklearn.tree._tree.Tree"]
+                )
+
+                # Graficos
+                FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+                fig_path = FIGURES_DIR / f"p1_rf_n{n_est}_pred_vs_real.png"
+                
+                np.random.seed(SEED)
+                idx = np.random.choice(len(y_real), size=min(50_000, len(y_real)), replace=False)
+                y_r_sample = y_real[idx]
+                y_p_sample = y_pred[idx]
+                residuos = y_r_sample - y_p_sample
+                
+                limite = float(np.percentile(y_real, 99.9)) if len(y_real) > 0 and np.max(y_real) > 0 else 25.0
+                limite = max(limite, 5.0)
+
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                
+                ax1.scatter(y_r_sample, y_p_sample, s=4, alpha=0.2, color="tab:blue")
+                ax1.plot([0, limite], [0, limite], color="black", linestyle="--")
+                ax1.set_xlim(0, limite)
+                ax1.set_ylim(0, limite)
+                ax1.set_xlabel("Viajes reales por hora")
+                ax1.set_ylabel("Viajes predichos por hora")
+                ax1.set_title("Prediccion vs real (test)")
+
+                res_lim = float(np.percentile(np.abs(residuos), 99)) if len(residuos) > 0 else 1.0
+                res_lim = max(res_lim, 1.0)
+                
+                ax2.hist(residuos, bins=80, range=(-res_lim, res_lim), color="tab:blue", edgecolor="black", linewidth=0.5)
+                ax2.axvline(0, color="black", linestyle="--")
+                ax2.set_xlabel("Residuo (real - predicho)")
+                ax2.set_ylabel("Frecuencia")
+                ax2.set_title("Residuos (test)")
+
+                fig.suptitle(f"P1 - RF (n_estimators={n_est})")
+                fig.savefig(fig_path, dpi=150, bbox_inches="tight")
+                plt.close(fig)
+                
+                mlflow.log_artifact(str(fig_path), artifact_path="figures")
+                logger.success(f"Nested run - n_estimators={n_est} - Test MAE: {metrics['mae']:.3f}")
+
 @app.command("p2")
 def train_p2(
     model_name: str = typer.Option(
