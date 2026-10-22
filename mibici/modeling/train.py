@@ -303,7 +303,13 @@ def train_p2(
     ),
     model_path: Path = typer.Option(MODELS_DIR / "model_p2.pkl", help="Modelo P2."),
 ):
-    """Clasificacion (P2) con soporte de búsqueda, nested runs, firmas y artefactos."""
+    """Clasificacion (P2): la estacion quedara vacia o saturada en las proximas horas?
+
+    La etiqueta es el proxy de riesgo de features.add_risk_label
+    (ver references/proxy_riesgo_p2.md). Se usa el split temporal de config.py:
+    se entrena con train (2023-05..2024-12), se valida con val (2025-01..2025-06)
+    y se evalua con test (2025-07..2026-09).
+    """
     from mibici.features import add_risk_label
     from mibici.modeling.regression import FEATURES
     from mibici.modeling.tracking import data_params, run_tags, split_params
@@ -316,17 +322,22 @@ def train_p2(
 
     columnas = ["estacion_id", "salidas", "llegadas", "split"] + FEATURES
     df = pd.read_parquet(features_path, columns=columnas)
+    
+    # La etiqueta va antes del dropna: necesita las 3 horas siguientes de cada estacion
     df = add_risk_label(df)
     df = df.dropna(subset=FEATURES + ["riesgo"])
 
-    # El split y las matrices de entrenamiento se definen AQUÍ (antes del if/elif)
     train = df[df["split"] == "train"]
+    val = df[df["split"] == "val"]
     test = df[df["split"] == "test"]
+    
     X_train, y_train = train[FEATURES], train["riesgo"].astype(int)
+    X_val, y_val = val[FEATURES], val["riesgo"].astype(int)
     X_test, y_test = test[FEATURES], test["riesgo"].astype(int)
 
     logger.info(
         f"P2 train={len(train):,} filas ({y_train.mean():.2%} en riesgo) | "
+        f"val={len(val):,} filas ({y_val.mean():.2%} en riesgo) | "
         f"test={len(test):,} filas ({y_test.mean():.2%} en riesgo)"
     )
 
@@ -367,9 +378,22 @@ def train_p2(
 
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
             joblib.dump(model, model_path)
+            mlflow.log_artifact(str(model_path), artifact_path="model")
+
+            # Matriz de confusión para dummy
+            FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+            plt.figure(figsize=(6, 6))
+            sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt="d", cmap="Blues")
+            plt.title("Matriz de Confusion - P2 (DUMMY)")
+            plt.xlabel("Prediccion del Riesgo")
+            plt.ylabel("Riesgo Real")
+            artifact_path = FIGURES_DIR / "matriz_confusion_p2_dummy.png"
+            plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
+            mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
+            plt.close()
 
     elif model_name == "logreg":
-        # Búsqueda organizada como Nested Runs (Corrida Padre + Hijas) - Issue #64
+        # Búsqueda organizada como Nested Runs con selección en VALIDACIÓN (Evita fuga en test)
         with mlflow.start_run(run_name="P2-parent-search-logreg") as parent_run:
             parent_tags = run_tags("P2")
             parent_tags.update({"model_family": "logreg", "stage_of_work": "search"})
@@ -384,10 +408,8 @@ def train_p2(
             })
 
             C_values = [0.1, 1.0, 10.0]
-            mejor_f1 = -1
-            mejor_modelo = None
-            mejor_met = {}
-            mejor_pred = None
+            mejor_f1_val = -1
+            mejor_C = None
 
             for c_val in C_values:
                 with mlflow.start_run(run_name=f"p2-child-logreg-C{c_val}", nested=True) as child_run:
@@ -400,27 +422,44 @@ def train_p2(
                         LogisticRegression(C=c_val, class_weight="balanced", random_state=SEED, max_iter=1000),
                     )
                     sub_model.fit(X_train, y_train)
-                    y_pred = sub_model.predict(X_test)
-                    y_prob = sub_model.predict_proba(X_test)[:, 1]
                     
-                    child_metrics = {
-                        "test_precision": precision_score(y_test, y_pred, zero_division=0),
-                        "test_recall": recall_score(y_test, y_pred, zero_division=0),
-                        "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
-                        "test_roc_auc": roc_auc_score(y_test, y_prob),
+                    # Evaluación en VALIDACIÓN para selección de hiperparámetros (sin fuga de test)
+                    y_val_pred = sub_model.predict(X_val)
+                    y_val_prob = sub_model.predict_proba(X_val)[:, 1]
+                    
+                    val_metrics = {
+                        "val_precision": precision_score(y_val, y_val_pred, zero_division=0),
+                        "val_recall": recall_score(y_val, y_val_pred, zero_division=0),
+                        "val_f1_macro": f1_score(y_val, y_val_pred, average="macro", zero_division=0),
+                        "val_roc_auc": roc_auc_score(y_val, y_val_prob),
                     }
                     mlflow.log_param("C", c_val)
-                    mlflow.log_metrics(child_metrics)
+                    mlflow.log_metrics(val_metrics)
 
-                    if child_metrics["test_f1_macro"] > mejor_f1:
-                        mejor_f1 = child_metrics["test_f1_macro"]
-                        mejor_modelo = sub_model
-                        mejor_met = child_metrics
-                        mejor_pred = y_pred
+                    if val_metrics["val_f1_macro"] > mejor_f1_val:
+                        mejor_f1_val = val_metrics["val_f1_macro"]
+                        mejor_C = c_val
 
-            mlflow.log_metrics(mejor_met)
-            
-            signature = infer_signature(X_test, mejor_pred)
+            # Entrenar modelo final con el mejor C encontrado en val, evaluando una sola vez en TEST
+            logger.info(f"Mejor C encontrado en validación: {mejor_C}")
+            mejor_modelo = make_pipeline(
+                StandardScaler(),
+                LogisticRegression(C=mejor_C, class_weight="balanced", random_state=SEED, max_iter=1000),
+            )
+            mejor_modelo.fit(X_train, y_train)
+            y_pred = mejor_modelo.predict(X_test)
+            y_prob = mejor_modelo.predict_proba(X_test)[:, 1]
+
+            test_metrics = {
+                "test_precision": precision_score(y_test, y_pred, zero_division=0),
+                "test_recall": recall_score(y_test, y_pred, zero_division=0),
+                "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
+                "test_roc_auc": roc_auc_score(y_test, y_prob),
+            }
+            mlflow.log_param("best_C", mejor_C)
+            mlflow.log_metrics(test_metrics)
+
+            signature = infer_signature(X_test, y_pred)
             mlflow.sklearn.log_model(
                 mejor_modelo, 
                 artifact_path="model", 
@@ -434,10 +473,11 @@ def train_p2(
 
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
             joblib.dump(mejor_modelo, model_path)
+            mlflow.log_artifact(str(model_path), artifact_path="model")
             
             FIGURES_DIR.mkdir(parents=True, exist_ok=True)
             plt.figure(figsize=(6, 6))
-            sns.heatmap(confusion_matrix(y_test, mejor_pred), annot=True, fmt="d", cmap="Blues")
+            sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt="d", cmap="Blues")
             plt.title("Matriz de Confusion - P2 (LOGREG OPTIMIZADO)")
             plt.xlabel("Prediccion del Riesgo")
             plt.ylabel("Riesgo Real")
@@ -446,7 +486,7 @@ def train_p2(
             mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
             plt.close()
 
-            logger.success(f"Búsqueda nested runs P2 finalizada. Mejor F1 Macro: {mejor_f1:.3f}")
+            logger.success(f"Búsqueda nested runs P2 finalizada. Mejor F1 Macro en val: {mejor_f1_val:.3f}")
     else:
         raise ValueError(f"Modelo no valido: {model_name}. Usar 'dummy' o 'logreg'.")
 
