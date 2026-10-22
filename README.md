@@ -48,12 +48,21 @@ pip install -r requirements.txt  # instala también el paquete mibici (-e .)
 
 ## Descarga de datos
 
+**Clon limpio (desde cero):** solo hace falta este comando. Descarga los 41 CSVs mensuales y la nomenclatura de estaciones (~1.2 GB) y los unifica en un Parquet:
+
 ```bash
-python -m mibici.dataset               # primera vez: descarga los 41 CSVs y unifica
-python -m mibici.dataset --skip-download  # CSVs ya presentes: solo re-unifica
-python -m mibici.dataset --force       # regenera aunque exista el Parquet
-python -m mibici.dataset --limit 2     # prueba rápida con 2 meses (escribe todo aparte)
+python -m mibici.dataset
 ```
+
+> Si vas a reproducir la entrega con `mlflow run` (ver [Reproducir con `mlflow run`](#reproducir-con-mlflow-run)), el entry point `ingest` ya ejecuta este mismo paso; no hace falta correrlo aparte.
+
+**Opcionales** (no se necesitan en un clon limpio):
+
+| Comando | Cuándo usarlo |
+|---------|---------------|
+| `python -m mibici.dataset --skip-download` | Ya tienes los CSVs en `data/raw/csv/` y solo quieres volver a unificarlos (p. ej. después de un cambio en la normalización). Falla si falta algún CSV. |
+| `python -m mibici.dataset --force` | El Parquet unificado ya existe y quieres regenerarlo sin que se detenga a preguntar `¿Continuar?`. Los CSVs que ya están descargados se reutilizan. |
+| `python -m mibici.dataset --limit 2` | Prueba rápida con solo 2 meses, para revisar que la ingesta funciona sin descargar todo. Escribe sus salidas aparte y no toca el Parquet ni el manifiesto completos. |
 
 Salidas:
 
