@@ -33,6 +33,8 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 
 - Python 3.12
 - ~2 GB de espacio libre (CSVs + Parquet)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/): `mlflow run` lo usa para crear el entorno del `python_env.yaml` (Python 3.12.9 con versiones fijadas). Sin uv, MLflow necesita pyenv y falla con `'None' install 3.12.9`.
+- **Windows:** activar el *Modo de programador* (Configuración → Actualización y seguridad → Para programadores). `mlflow run` crea symlinks al instalar dependencias; sin ese permiso falla con `WinError 1314`.
 
 ## Instalación
 
@@ -103,12 +105,78 @@ mlflow server --backend-store-uri sqlite:///mlflow.db --port 5000
 En otra terminal (o antes de lanzar cualquier corrida), apunta la variable de entorno al servidor para que todos los runs se registren ahí:
 
 ```bash
-export MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
+export MLFLOW_TRACKING_URI="http://127.0.0.1:5000"      # bash / macOS / Linux / Git Bash
+```
+```powershell
+$env:MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"     # PowerShell
+```
+```cmd
+set MLFLOW_TRACKING_URI=http://127.0.0.1:5000           :: CMD (sin espacios ni comillas)
 ```
 
-Puedes persistirla en `.env` (no se versiona) para no repetirla en cada sesión. Todas las corridas de esta entrega se lanzan con `mlflow run`, no desde un notebook.
+La variable solo vive en la terminal donde se definió: los `mlflow run` deben lanzarse desde esa misma terminal. Puedes persistirla en `.env` (no se versiona) para no repetirla en cada sesión. Todas las corridas de esta entrega se lanzan con `mlflow run`, no desde un notebook.
 
 > `mlflow.db` y `mlruns/` **no se versionan** (están en `.gitignore`, junto con `mlartifacts/`, los datos MiBici y los modelos serializados). En un clon nuevo el tracking arranca vacío, así que los runs se regeneran con los comandos de esta sección (las capturas de evidencia están en `reports/figures/mlflow_evidencia/`).
+
+### Reproducir con `mlflow run`
+
+Con el servidor arriba y `MLFLOW_TRACKING_URI` definida, desde la raíz del repo y en este orden. `--experiment-name` va siempre, para que los runs no caigan en `Default`; `--env-manager uv` crea el entorno aislado del `python_env.yaml` (la primera vez tarda ~1 min, después se reutiliza).
+
+```bash
+# 1. Datos y features
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e ingest              # macOS / Linux
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e ingest -P limit=0   # Windows
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e features
+
+# 2. Baselines
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p1 -P model=ridge
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=dummy
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=random
+
+# 3. Modelo elegido de cada pregunta
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p1 -P model=rf -P n_estimators=300
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=logreg
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=k-means++ -P n_init=10
+
+# 4. Model Registry
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e register
+```
+
+Valores de `model` por pregunta (vacío = baseline): p1 `ridge` | `rf` · p2 `dummy` | `logreg` · p3 `random` | `k-means++`. Los parámetros completos de cada entry point están en el `MLproject`; los defaults (rutas, fechas, semilla) viven en `mibici/config.py`.
+
+Notas:
+
+- **`-P limit=0` en la ingesta (solo Windows)** significa "sin límite". En Windows, el default vacío llega como `""` y la ingesta falla con `Invalid value for '--limit'`; en macOS/Linux no hace falta.
+- **Re-ejecutar la ingesta** cuando el Parquet ya existe: agrega `-P force=true`, o se detiene a preguntar `¿Continuar?`. Para no volver a descargar los CSV: `-P skip_download=true`.
+- **`features` es obligatorio** antes de entrenar P1 y P2. Sus runs (y los de `ingest`) no registran métricas ni parámetros: solo dejan trazabilidad de commit y entry point.
+- **Tiempos de referencia** (Windows, conexión doméstica): ingesta completa ~7.5 min (descarga ~6 min), features ~1 min, P2 `logreg` ~4.5 min, P3 <1 min.
+- **Datos de la fuente:** MiBici puede actualizar CSV ya publicados. Al 22 oct 2026, el de 2023-05 trae 26 viajes más que el registrado en `data/manifest.json` (15,376,153 vs 15,376,127 en total), así que una descarga nueva produce otros hashes y `pytest` puede marcar esa diferencia. El manifiesto versionado es la referencia del equipo: **no lo commitees al re-ejecutar la ingesta** (`git restore data/manifest.json`).
+
+### Model Registry
+
+`mlflow run . -e register` (`mibici/modeling/register.py`) registra el mejor run de cada pregunta según su métrica de test:
+
+| Pregunta | Modelo registrado | Métrica de selección |
+|---|---|---|
+| P1 | `mibici-equipo01-p1-demanda` | `test_mae` (menor es mejor) |
+| P2 | `mibici-equipo01-p2-riesgo` | `test_roc_auc` (mayor es mejor) |
+| P3 | `mibici-equipo01-p3-grupos` | `test_silhouette_score` (mayor es mejor) |
+
+- Busca primero entre las corridas con tag `stage_of_work=candidate`; si ninguna tiene modelo logueado, usa todas las corridas de la pregunta.
+- Cada versión lleva en su descripción el linaje: run de origen, commit y hashes del manifiesto y del Parquet.
+- No registra dos veces el mismo run: re-ejecutarlo es seguro.
+- **Ciclo de vida:** la versión en producción se marca con el alias `@champion` y se carga por nombre:
+
+  ```python
+  import mlflow
+  modelo = mlflow.pyfunc.load_model("models:/mibici-equipo01-p2-riesgo@champion")
+  ```
+
+  > Pendiente (#71): `register.py` todavía no asigna el alias; hoy se pone a mano en la UI (Models → versión → *Add alias*). Mientras tanto se carga por versión: `models:/mibici-equipo01-p2-riesgo/1`.
+
+### Ejecución directa (sin MLflow Project)
+
+Útil para desarrollo. Para reproducir la entrega usa los comandos `mlflow run` de arriba. Las búsquedas con nested runs de P1 y P3 hoy solo se lanzan así: `python -m mibici.modeling.train p1-search` y `python -m mibici.modeling.train p3-search`.
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
