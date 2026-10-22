@@ -129,9 +129,14 @@ export MLFLOW_TRACKING_URI="http://127.0.0.1:5000"      # bash / macOS / Linux /
 ```powershell
 $env:MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"     # PowerShell
 ```
+En CMD, sin espacios ni comillas (CMD guarda en la variable todo lo que va después del `=`, incluido un espacio al final):
+
 ```cmd
-set MLFLOW_TRACKING_URI=http://127.0.0.1:5000           :: CMD (sin espacios ni comillas)
+set MLFLOW_TRACKING_URI=http://127.0.0.1:5000
+echo [%MLFLOW_TRACKING_URI%]
 ```
+
+El `echo` debe mostrar `[http://127.0.0.1:5000]`, con el `]` pegado al `5000`. Si aparece `[http://127.0.0.1:5000 ]`, la variable quedó con un espacio y `mlflow run` falla con `Invalid url: http://127.0.0.1:5000 /api/...`: vuelve a escribir el `set`.
 
 La variable solo vive en la terminal donde se definió: los `mlflow run` deben lanzarse desde esa misma terminal. Puedes persistirla en `.env` (no se versiona) para no repetirla en cada sesión. Todas las corridas de esta entrega se lanzan con `mlflow run`, no desde un notebook.
 
