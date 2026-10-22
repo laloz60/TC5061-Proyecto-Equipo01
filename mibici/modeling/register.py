@@ -43,18 +43,14 @@ def _mejor_run_con_modelo(cliente: MlflowClient, pregunta: str, metrica: str, or
 
     base = f"tags.pregunta = '{pregunta.upper()}'"
     ordenado = [f"metrics.{metrica} {orden}"]
-    runs = cliente.search_runs(
-        [experimento.experiment_id],
-        filter_string=f"{base} AND tags.stage_of_work = 'candidate'",
-        order_by=ordenado,
-    )
-    if not runs:
-        # corridas previas a las etiquetas stage_of_work
-        runs = cliente.search_runs([experimento.experiment_id], filter_string=base, order_by=ordenado)
-
-    for run in runs:
-        if _run_tiene_modelo(cliente, run.info.run_id, logueados):
-            return run
+    # primero candidatos; si ninguno tiene modelo (p. ej. el padre 'search' lo
+    # registra), se busca entre todas las corridas previas de la pregunta
+    filtros = [f"{base} AND tags.stage_of_work = 'candidate'", base]
+    for filtro in filtros:
+        runs = cliente.search_runs([experimento.experiment_id], filter_string=filtro, order_by=ordenado)
+        for run in runs:
+            if _run_tiene_modelo(cliente, run.info.run_id, logueados):
+                return run
     return None
 
 
