@@ -175,6 +175,8 @@ class KMeansClusterTrainer(BaseTrainer):
         model_path: Path,
     ):
         """Calcula el Silhouette Score, serializa el modelo y registra artefactos y trazabilidad completa en MLflow."""
+        from mlflow.models import infer_signature
+
         from mibici.modeling.tracking import data_params, run_tags, split_params
 
         run_type = "baseline" if self.init_method == "random" else "candidate"
@@ -206,6 +208,12 @@ class KMeansClusterTrainer(BaseTrainer):
             joblib.dump(kmeans_model, model_path)
             logger.success(f"Modelo serializado guardado en: {model_path}")
             mlflow.log_artifact(str(model_path), artifact_path="model_serialized")
+            mlflow.sklearn.log_model(
+                sk_model=kmeans_model,
+                name="model",
+                signature=infer_signature(X_profiles, labels),
+                input_example=X_profiles[:5],
+            )
 
             # Generación de Artefacto Visual (Mapa de Clústeres)
             FIGURES_DIR.mkdir(parents=True, exist_ok=True)

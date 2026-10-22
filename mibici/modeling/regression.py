@@ -17,6 +17,8 @@ import joblib
 from loguru import logger
 import matplotlib.pyplot as plt
 import mlflow
+from mlflow.models import infer_signature
+import mlflow.sklearn
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -185,7 +187,14 @@ def train_p1(features_path: Path, kind="ridge", rf_max_samples=500_000, n_estima
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         model_path = MODELS_DIR / f"p1_{kind}.joblib"
         joblib.dump(model, model_path)
-        mlflow.log_artifact(str(model_path), artifact_path="model")
+        mlflow.log_artifact(str(model_path), artifact_path="model_serialized")
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            name="model",
+            signature=infer_signature(train[FEATURES], train[TARGET]),
+            input_example=train[FEATURES].head(5),
+            skops_trusted_types=["sklearn.tree._tree.Tree"],
+        )
 
         fig_path = FIGURES_DIR / f"p1_{kind}_pred_vs_real.png"
         plot_predictions(test[TARGET].to_numpy(), predicciones["test"], run_name, fig_path)
