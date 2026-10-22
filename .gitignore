@@ -14,6 +14,7 @@ models/*.pkl
 models/*.joblib
 models/*.onnx
 models/*.bin
+models/signature_metadata_*/
 
 # Credenciales y variables de entorno
 .env
