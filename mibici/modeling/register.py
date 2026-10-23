@@ -87,6 +87,7 @@ def _registrar(pregunta: str) -> None:
     descripcion = _descripcion(run, metrica)
     cliente.update_registered_model(nombre, description=descripcion)
     cliente.update_model_version(nombre, version.version, description=descripcion)
+    cliente.set_registered_model_alias(nombre, "champion", str(version.version))
     logger.success(
         f"{nombre} v{version.version} <- {run.info.run_name} "
         f"({metrica}={run.data.metrics.get(metrica):.4f})"
