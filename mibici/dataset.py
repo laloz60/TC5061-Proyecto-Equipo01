@@ -555,13 +555,22 @@ def main(
             f"El Parquet unificado ya existe ({size_mb:,.0f} MB, "
             f"{existing_rows:,} filas): {unified_path.name}"
         )
-        logger.warning(
-            f"Regenerarlo vuelve a descargar los {len(entries)} CSVs y sobrescribe el archivo actual."
-        )
+        csv_dir = RAW_DATA_DIR / "csv"
+        faltan = [
+            e.filename
+            for e in entries
+            if not (csv_dir / e.filename).exists() or (csv_dir / e.filename).stat().st_size == 0
+        ]
+        if skip_download or not faltan:
+            accion = f"re-unifica los {len(entries)} CSVs ya descargados"
+        else:
+            accion = f"descarga los {len(faltan)} CSVs faltantes y re-unifica los {len(entries)}"
+        logger.warning(f"Regenerarlo {accion} y sobrescribe el archivo actual.")
         if not typer.confirm("¿Continuar?", default=False):
             logger.info(
                 "Abortado: nada fue modificado. "
-                "Para regenerar a la fuerza: python -m mibici.dataset --force"
+                "Para regenerar a la fuerza: python -m mibici.dataset --force "
+                "(usa --skip-download si los CSVs ya están)"
             )
             raise typer.Exit(code=1)
 
