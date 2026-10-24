@@ -198,7 +198,9 @@ La salida completa de estos comandos en un clon limpio (comando, respuesta del l
   modelo = mlflow.pyfunc.load_model("models:/mibici-equipo01-p2-riesgo@champion")
   ```
 
-  > Pendiente (#71): `register.py` todavía no asigna el alias; hoy se pone a mano en la UI (Models → versión → *Add alias*). Mientras tanto se carga por versión: `models:/mibici-equipo01-p2-riesgo/1`.
+  `register.py` asigna el alias `@champion` a cada versión que registra (#71). Se usan aliases en lugar de etapas porque las etapas (`Staging`/`Production`) están deprecadas desde MLflow 2.9; promover otra versión es solo mover el alias, sin cambiar el código que carga el modelo.
+
+  > El alias solo se asigna al crear una versión nueva. Si el run ya estaba registrado, `register` lo omite (`ya esta registrado desde este run; se omite`) y no toca los aliases: en un `mlflow.db` con modelos registrados antes de #71, bórralos y vuelve a correr `register`, o asigna el alias en la UI (Model registry → versión → *Add alias*).
 
 ### Ejecución directa (sin MLflow Project)
 
