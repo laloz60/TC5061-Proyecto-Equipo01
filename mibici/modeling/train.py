@@ -418,13 +418,8 @@ def train_p1_search(
     import warnings
 
     from mibici.config import FIGURES_DIR, MODELS_DIR
-    from mibici.modeling.regression import (
-        FEATURES,
-        TARGET,
-        build_model,
-        load_p1_data,
-        regression_metrics,
-    )
+    from mibici.modeling.regression import (FEATURES, TARGET,
+        build_model, load_p1_data, regression_metrics,)
     from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
 
     warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.utils.parallel") # Ignorar la advertencia
@@ -479,27 +474,63 @@ def train_p1_search(
                 signature = infer_signature(train[FEATURES], y_pred[:len(train[FEATURES])])
                 input_example = train[FEATURES].head(5)
 
-                signature_dir = MODELS_DIR / f"signature_metadata_rf_n{n_est}"
-                signature_dir.mkdir(parents=True, exist_ok=True)
-
-                with open(signature_dir / "signature.json", "w", encoding="utf-8") as f:
-                    json.dump(signature.to_dict(), f, indent=4)
-                with open(signature_dir / "input_example.json", "w", encoding="utf-8") as f:
-                    json.dump(input_example.values.tolist(), f)
-
-                mlflow.log_artifacts(str(signature_dir), artifact_path="model_signature")
-                mlflow.sklearn.log_model(
-                    sk_model=model,
-                    name="model",
-                    signature=signature,
-                    input_example=input_example,
-                    skops_trusted_types=["sklearn.tree._tree.Tree"]
-                )
-
-                # Graficos
-                FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-                fig_path = FIGURES_DIR / f"p1_rf_n{n_est}_pred_vs_real.png"
+                # SUBCARPETAS
+                temp_dir = Path(f"temp_artifacts_n{n_est}")
+                temp_plots = temp_dir / "plots"
+                temp_data = temp_dir / "data"
+                temp_config = temp_dir / "config"
                 
+                temp_plots.mkdir(parents=True, exist_ok=True)
+                temp_data.mkdir(parents=True, exist_ok=True)
+                temp_config.mkdir(parents=True, exist_ok=True)
+                
+                # Firma entrada/salida
+                signature = infer_signature(train[FEATURES], y_pred[:len(train[FEATURES])])
+                input_example = train[FEATURES].head(5)
+
+                mlflow.sklearn.log_model(
+                    sk_model=model, 
+                    artifact_path="model", 
+                    signature=signature,
+                    input_example=input_example, 
+                    skops_trusted_types=["sklearn.tree._tree.Tree"])
+
+                # Data/ JSON
+                if MANIFEST_PATH.exists():
+                    df_mlflow_input = train[FEATURES].copy()
+                    df_mlflow_input[TARGET] = train[TARGET]
+                    
+                    dataset_source = mlflow.data.from_pandas(
+                        df_mlflow_input, 
+                        source=str(MANIFEST_PATH), 
+                        name="mibici_p1_train", 
+                        targets=TARGET) 
+                    mlflow.log_input(dataset_source, context="training")
+                    
+                    manifiesto_data = {
+                        "version_datos": "v2.0-entregable2", 
+                        "fuente_origen": str(MANIFEST_PATH),
+                        "registros_entrenamiento": len(train), 
+                        "columnas_features": FEATURES, 
+                        "anonimizado": True}
+                    with open(temp_data / "manifiesto_ingesta.json", "w", encoding="utf-8") as f:
+                        json.dump(manifiesto_data, f, indent=4)
+                    
+                    mlflow.log_artifacts(str(temp_data), artifact_path="data")
+
+                # Config/
+                config_corrida = {
+                    "n_estimators": n_est, 
+                    "max_depth": 16,
+                    "min_samples_leaf": 20, 
+                    "global_seed": SEED,
+                    "features_count": len(FEATURES)}
+                with open(temp_config / "config_ejecucion.json", "w", encoding="utf-8") as f:
+                    json.dump(config_corrida, f, indent=4)
+                
+                mlflow.log_artifacts(str(temp_config), artifact_path="config")
+
+                # Graficas plots/
                 np.random.seed(SEED)
                 idx = np.random.choice(len(y_real), size=min(50_000, len(y_real)), replace=False)
                 y_r_sample = y_real[idx]
@@ -509,31 +540,86 @@ def train_p1_search(
                 limite = float(np.percentile(y_real, 99.9)) if len(y_real) > 0 and np.max(y_real) > 0 else 25.0
                 limite = max(limite, 5.0)
 
-                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-                
+                # Gráfica Real vs Pred
+                fig1, ax1 = plt.subplots(figsize=(6, 5))
                 ax1.scatter(y_r_sample, y_p_sample, s=4, alpha=0.2, color="tab:blue")
                 ax1.plot([0, limite], [0, limite], color="black", linestyle="--")
                 ax1.set_xlim(0, limite)
                 ax1.set_ylim(0, limite)
                 ax1.set_xlabel("Viajes reales por hora")
                 ax1.set_ylabel("Viajes predichos por hora")
-                ax1.set_title("Prediccion vs real (test)")
+                ax1.set_title(f"Predicción vs Real (n_estimators={n_est})")
+                fig1.savefig(temp_plots / "real_vs_pred.png", dpi=150, bbox_inches="tight")
+                plt.close(fig1)
 
+                # Gráfica Residuos
+                fig2, ax2 = plt.subplots(figsize=(6, 5))
                 res_lim = float(np.percentile(np.abs(residuos), 99)) if len(residuos) > 0 else 1.0
                 res_lim = max(res_lim, 1.0)
-                
-                ax2.hist(residuos, bins=80, range=(-res_lim, res_lim), color="tab:blue", edgecolor="black", linewidth=0.5)
+                ax2.hist(residuos, bins=80, range=(-res_lim, res_lim), color="tab:orange", edgecolor="black", linewidth=0.5)
                 ax2.axvline(0, color="black", linestyle="--")
                 ax2.set_xlabel("Residuo (real - predicho)")
                 ax2.set_ylabel("Frecuencia")
-                ax2.set_title("Residuos (test)")
-
-                fig.suptitle(f"P1 - RF (n_estimators={n_est})")
-                fig.savefig(fig_path, dpi=150, bbox_inches="tight")
-                plt.close(fig)
+                ax2.set_title(f"Distribución de Residuos (n_estimators={n_est})")
+                fig2.savefig(temp_plots / "residuos.png", dpi=150, bbox_inches="tight")
+                plt.close(fig2)
                 
-                mlflow.log_artifact(str(fig_path), artifact_path="figures")
+                mlflow.log_artifacts(str(temp_plots), artifact_path="plots")
+
+                # Firma en json dentro de model_signature
+                signature_dir = MODELS_DIR / f"signature_metadata_rf_n{n_est}"
+                signature_dir.mkdir(parents=True, exist_ok=True)
+                with open(signature_dir / "signature.json", "w", encoding="utf-8") as f:
+                    json.dump(signature.to_dict(), f, indent=4)
+                with open(signature_dir / "input_example.json", "w", encoding="utf-8") as f:
+                    json.dump(input_example.values.tolist(), f)
+                mlflow.log_artifacts(str(signature_dir), artifact_path="model_signature")
+
+                import shutil
+                # Estructura
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
                 logger.success(f"Nested run - n_estimators={n_est} - Test MAE: {metrics['mae']:.3f}")
+
+                # Graficos juntos se puede descomentar en caso de requerir
+
+                # FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+                # fig_path = FIGURES_DIR / f"p1_rf_n{n_est}_pred_vs_real.png"
+                
+                # np.random.seed(SEED)
+                # idx = np.random.choice(len(y_real), size=min(50_000, len(y_real)), replace=False)
+                # y_r_sample = y_real[idx]
+                # y_p_sample = y_pred[idx]
+                # residuos = y_r_sample - y_p_sample
+                
+                # limite = float(np.percentile(y_real, 99.9)) if len(y_real) > 0 and np.max(y_real) > 0 else 25.0
+                # limite = max(limite, 5.0)
+
+                # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                
+                # ax1.scatter(y_r_sample, y_p_sample, s=4, alpha=0.2, color="tab:blue")
+                # ax1.plot([0, limite], [0, limite], color="black", linestyle="--")
+                # ax1.set_xlim(0, limite)
+                # ax1.set_ylim(0, limite)
+                # ax1.set_xlabel("Viajes reales por hora")
+                # ax1.set_ylabel("Viajes predichos por hora")
+                # ax1.set_title("Prediccion vs real (test)")
+
+                # res_lim = float(np.percentile(np.abs(residuos), 99)) if len(residuos) > 0 else 1.0
+                # res_lim = max(res_lim, 1.0)
+                
+                # ax2.hist(residuos, bins=80, range=(-res_lim, res_lim), color="tab:blue", edgecolor="black", linewidth=0.5)
+                # ax2.axvline(0, color="black", linestyle="--")
+                # ax2.set_xlabel("Residuo (real - predicho)")
+                # ax2.set_ylabel("Frecuencia")
+                # ax2.set_title("Residuos (test)")
+
+                # fig.suptitle(f"P1 - RF (n_estimators={n_est})")
+                # fig.savefig(fig_path, dpi=150, bbox_inches="tight")
+                # plt.close(fig)
+                
+                # mlflow.log_artifact(str(fig_path), artifact_path="figures")
+               # logger.success(f"Nested run - n_estimators={n_est} - Test MAE: {metrics['mae']:.3f}")
 
 @app.command("p2")
 def train_p2(
