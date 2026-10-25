@@ -157,16 +157,16 @@ mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P ques
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=dummy
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=random
 
-# 3. Modelo elegido de cada pregunta
-mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p1 -P model=rf -P n_estimators=300
-mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=logreg
-mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=k-means++ -P n_init=10
+# 3. Búsquedas con nested runs (de aquí salen los modelos elegidos)
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e search -P question=p1   # RF, n_estimators 50,100,200
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e search -P question=p2   # LogReg, C 0.1,1,10
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e search -P question=p3   # K-Means++, K 3,4,5,6
 
 # 4. Model Registry
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e register
 ```
 
-Valores de `model` por pregunta (vacío = baseline): p1 `ridge` | `rf` · p2 `dummy` | `logreg` · p3 `random` | `k-means++`. Los parámetros completos de cada entry point están en el `MLproject`; los defaults (rutas, fechas, semilla) viven en `mibici/config.py`.
+Valores de `model` por pregunta (vacío = baseline): p1 `ridge` | `rf` · p2 `dummy` | `logreg` · p3 `random` | `k-means++`. El entry point `search` crea un run padre por búsqueda y un run hijo por valor (tags `stage_of_work=search` y `candidate`); con `-P grid=...` se cambia la malla, p. ej. `-P question=p3 -P grid=3,4`. Un candidato suelto, fuera de búsqueda, se entrena con `train` (p. ej. `-e train -P question=p1 -P model=rf -P n_estimators=200`). Los parámetros completos de cada entry point están en el `MLproject`; los defaults (rutas, fechas, semilla) viven en `mibici/config.py`.
 
 Notas:
 
@@ -202,7 +202,7 @@ Notas:
 
 ### Ejecución directa (sin MLflow Project)
 
-Útil para desarrollo. Para reproducir la entrega usa los comandos `mlflow run` de arriba. Las búsquedas con nested runs de P1 y P3 hoy solo se lanzan así: `python -m mibici.modeling.train p1-search` y `python -m mibici.modeling.train p3-search`.
+Útil para desarrollo. Para reproducir la entrega usa los comandos `mlflow run` de arriba: las búsquedas con nested runs se lanzan con `-e search` (internamente llama a `python -m mibici.modeling.train p1-search` / `p3-search`).
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
