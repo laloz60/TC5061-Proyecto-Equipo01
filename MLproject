@@ -47,5 +47,17 @@ entry_points:
       --n-estimators {n_estimators} --rf-max-samples {rf_max_samples}
       --n-clusters {n_clusters} --n-init {n_init}
 
+  search:
+    parameters:
+      question:
+        type: string
+        default: p1
+      grid:
+        type: string
+        default: auto
+    command: >
+      python -m mibici.mlflow_entry search
+      --question {question} --grid {grid}
+
   register:
     command: python -m mibici.modeling.register
