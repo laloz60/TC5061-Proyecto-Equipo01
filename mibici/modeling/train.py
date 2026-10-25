@@ -25,6 +25,8 @@ from sklearn.cluster import KMeans
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
+    PrecisionRecallDisplay,
+    average_precision_score,
     confusion_matrix,
     f1_score,
     precision_score,
@@ -813,6 +815,18 @@ def train_p2(
             plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
             mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
             plt.close()
+
+            # Curva precisión-recall en test: la matriz de confusión solo muestra el umbral 0.5
+            fig, ax = plt.subplots(figsize=(6, 5))
+            PrecisionRecallDisplay.from_predictions(
+                y_test, y_prob, name="LogReg", plot_chance_level=True, drop_intermediate=True, ax=ax
+            )
+            ax.set_title("Curva Precision-Recall - P2 (LOGREG OPTIMIZADO)")
+            pr_path = FIGURES_DIR / "curva_pr_p2_logreg.png"
+            fig.savefig(pr_path, dpi=150, bbox_inches="tight")
+            mlflow.log_artifact(str(pr_path), artifact_path="classification_artifacts")
+            plt.close(fig)
+            mlflow.log_metric("test_average_precision", average_precision_score(y_test, y_prob))
 
             logger.success(f"Búsqueda nested runs P2 finalizada. Mejor F1 Macro en val: {mejor_f1_val:.3f}")
     else:
