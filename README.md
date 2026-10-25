@@ -14,7 +14,7 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 | P2 | ¿Una estación estará en riesgo de quedarse sin bicis/anclajes en un periodo futuro? | Clasificación | [@GemmaMartinez](https://github.com/GemmaMartinez) + [@smuciton](https://github.com/smuciton) |
 | P3 | ¿Qué grupos de estaciones comparten patrones de uso y dónde se ubican? | Clustering | [@JesusTafolla](https://github.com/JesusTafolla) |
 
-> **Reparto de P2:** es la tarea más pesada (diseño del proxy de riesgo + baseline de clasificación + evidencia MLflow), así que se divide en dos: **@smuciton** diseña y justifica el proxy de riesgo (#6) y **@GemmaMartinez** implementa el baseline de clasificación con su run en MLflow (#7).
+> **Reparto de P2:** es la tarea más pesada (diseño del proxy de riesgo + baseline de clasificación + evidencia MLflow), así que se divide en dos: **@smuciton** diseña y justifica el proxy de riesgo, es decir, la regla que define cuándo una estación está en riesgo de quedarse sin bicis o sin anclajes, y **@GemmaMartinez** implementa el baseline de clasificación que predice ese riesgo y registra su run en MLflow.
 
 ## Datos
 
@@ -176,8 +176,6 @@ Notas:
 - **Tiempos de referencia** (Windows, conexión doméstica): ingesta completa ~7.5 min (descarga ~6 min), features ~1 min, P2 `logreg` ~4.5 min, P3 <1 min.
 - **Datos de la fuente:** MiBici puede actualizar CSV ya publicados. Al 22 oct 2026, el de 2023-05 trae 26 viajes más que el registrado en `data/manifest.json` (15,376,153 vs 15,376,127 en total), así que una descarga nueva produce otros hashes y `pytest` marca esa diferencia (ver [Descarga de datos](#descarga-de-datos) para validar con tus datos). El manifiesto versionado es la referencia del equipo: **no lo commitees al re-ejecutar la ingesta** (`git restore data/manifest.json`).
 
-La salida completa de estos comandos en un clon limpio (comando, respuesta del log y resultado de cada paso) está en [`reports/validacion_clon_limpio_issue62.md`](reports/validacion_clon_limpio_issue62.md).
-
 ### Model Registry
 
 `mlflow run . -e register` (`mibici/modeling/register.py`) registra el mejor run de cada pregunta según su métrica de test:
@@ -198,7 +196,9 @@ La salida completa de estos comandos en un clon limpio (comando, respuesta del l
   modelo = mlflow.pyfunc.load_model("models:/mibici-equipo01-p2-riesgo@champion")
   ```
 
-  > Pendiente (#71): `register.py` todavía no asigna el alias; hoy se pone a mano en la UI (Models → versión → *Add alias*). Mientras tanto se carga por versión: `models:/mibici-equipo01-p2-riesgo/1`.
+  `register.py` asigna el alias `@champion` a cada versión que registra. Se usan aliases en lugar de etapas porque las etapas (`Staging`/`Production`) están deprecadas desde MLflow 2.9; promover otra versión es solo mover el alias, sin cambiar el código que carga el modelo.
+
+  > El alias solo se asigna al crear una versión nueva. Si el run ya estaba registrado, `register` lo omite (`ya esta registrado desde este run; se omite`) y no toca los aliases: en un `mlflow.db` con modelos registrados por una versión anterior de `register.py` (que no asignaba el alias), bórralos y vuelve a correr `register`, o asigna el alias en la UI (Model registry → versión → *Add alias*).
 
 ### Ejecución directa (sin MLflow Project)
 
@@ -288,9 +288,11 @@ reports/figures/mlflow_evidencia/
 
 ## Integrantes y responsabilidades
 
-| Integrante | GitHub | Responsabilidades |
-|------------|--------|-------------------|
-| Gerardo Lozano | [@laloz60](https://github.com/laloz60) | Infra e ingesta de datos, `features.py`, P1 baseline de regresión, README |
-| Gemma Martínez | [@GemmaMartinez](https://github.com/GemmaMartinez) | P2 — baseline de clasificación (#7), evidencia MLflow (#11) |
-| Jesús Tafolla | [@JesusTafolla](https://github.com/JesusTafolla) | Clustering P3 (#8), propuesta de modelos y métricas (#9) |
-| smuciton | [@smuciton](https://github.com/smuciton) | Definición de datos y condiciones de uso (#2), diagrama de arquitectura (#3), P2 — proxy de riesgo (#6) |
+| Integrante | GitHub | Propuesta del proyecto | Experimentos con MLflow |
+|------------|--------|------------------------|-------------------------|
+| Gerardo Lozano | [@laloz60](https://github.com/laloz60) | Scaffold CCDS, ingesta reproducible con manifiesto SHA-256 y sus pruebas, `features.py` sin fuga temporal, P1: variable objetivo y baseline de regresión, notebook de exploración, buenas prácticas del README | Servidor de tracking con SQLite, `python_env.yaml`, `MLproject` con entry points, registro de los 3 modelos en el Model Registry con linaje, aviso de re-ingesta |
+| Gemma Martínez | [@GemmaMartinez](https://github.com/GemmaMartinez) | P2: baseline de clasificación, evidencia MLflow (capturas de runs, artefactos y comparación) | Candidatas de P1 y P3 con nested runs, artefactos de la candidata de P1 (firma, manifiesto, gráficas y configuración), justificación del mejor modelo de cada pregunta |
+| Jesús Tafolla | [@JesusTafolla](https://github.com/JesusTafolla) | ML Canvas, P3: clustering de estaciones y mapa de grupos, propuesta de modelos y métricas, trazabilidad de los runs (fechas, versión de datos y commit), referencias APA 7 | Candidatas de P2 con nested runs, artefactos de las candidatas de P2 y P3, modelos en producción con alias `@champion`, justificación del mejor modelo de cada pregunta |
+| smuciton | [@smuciton](https://github.com/smuciton) | Definición de datos y condiciones de uso, diagrama de arquitectura, P2: diseño y documento del proxy de riesgo | README de reproducción con `mlflow run` y validación en clon limpio, capturas de MLflow para el reporte, reporte de experimentos en PDF, checklist de entrega y subida a Canvas |
+
+Todos: flujo de trabajo con PR y review por integrante, y revisión conjunta de la propuesta en PDF.
