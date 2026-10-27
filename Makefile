@@ -47,6 +47,21 @@ test:
 	python -m pytest tests
 
 
+## Run security checks (bandit and pip-audit)
+.PHONY: security
+security:
+	@echo "Corriendo chequeos de seguridad..."
+	mkdir -p reports/security
+	date > reports/security/bandit_report.txt
+	bandit -r mibici/ -f txt >> reports/security/bandit_report.txt || true
+	date > reports/security/pip_audit_report.txt
+	pip-audit -r requirements.txt >> reports/security/pip_audit_report.txt || true
+	@echo "Reportes guardados en reports/security/"
+
+## Run all unit tests, data validation and security checks
+.PHONY: check-all
+check-all: test security
+
 ## Set up Python interpreter environment
 .PHONY: create_environment
 create_environment:
