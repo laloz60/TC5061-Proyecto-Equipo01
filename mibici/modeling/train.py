@@ -25,6 +25,7 @@ import seaborn as sns
 from sklearn.cluster import KMeans
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import (
     PrecisionRecallDisplay,
     average_precision_score,
@@ -446,6 +447,36 @@ def train_p3_search(
                     f"con Silhouette val={sil_val:.4f} test={sil_test:.4f}"
                 )
 
+    # Nuevo modelo "Gaussian Mixture Model (GMM)"
+    with mlflow.start_run(run_name="p3-parent-search-gmm"):
+        mlflow.set_tags(run_tags("P3"))
+        mlflow.set_tag("stage_of_work", "search")
+        mlflow.set_tag("model_family", "gaussian_mixture")
+        mlflow.log_params(split_params())
+        mlflow.log_params(data_params())
+        
+        from sklearn.mixture import GaussianMixture
+        for k in k_values:
+            with mlflow.start_run(run_name=f"p3-candidate-gmm-k{k}", nested=True):
+                gmm = GaussianMixture(n_components=k, random_state=SEED, n_init=5)
+                # se ajusta en train; val decide y test solo se reporta
+                gmm.fit(perfiles["train"])
+                sil_val_gmm = KMeansClusterTrainer._silhouette_o_nan(
+                    perfiles["val"], gmm.predict(perfiles["val"])
+                )
+                sil_test_gmm = KMeansClusterTrainer._silhouette_o_nan(
+                    perfiles["test"], gmm.predict(perfiles["test"])
+                )
+                
+                mlflow.log_param("model_type", "GaussianMixture")
+                mlflow.log_param("n_clusters", k)
+                mlflow.log_metric("val_silhouette_score", sil_val_gmm)
+                mlflow.log_metric("test_silhouette_score", sil_test_gmm)
+                
+                tags_gmm = run_tags("P3")
+                tags_gmm.update({"stage_of_work": "candidate", "model_family": "gaussian_mixture"})
+                mlflow.set_tags(tags_gmm)
+
 @app.command("p1")
 def train_p1(
     model: str = typer.Option("ridge", help="Baseline: 'ridge' | Candidato: 'rf'"),
@@ -686,6 +717,33 @@ def train_p1_search(
                 
                 # mlflow.log_artifact(str(fig_path), artifact_path="figures")
                # logger.success(f"Nested run - n_estimators={n_est} - Test MAE: {metrics['mae']:.3f}")
+    
+    # Modelo de "Gradient Boosting"
+    with mlflow.start_run(run_name="p1-parent-search-gbr"):
+        mlflow.set_tags(run_tags("P1"))
+        mlflow.set_tag("stage_of_work", "search")
+        mlflow.set_tag("model_family", "gradient_boosting")
+        mlflow.log_params(split_params())
+        mlflow.log_params(data_params())
+        
+        for n_est in estimators_values:
+            with mlflow.start_run(run_name=f"p1-candidate-gbr-n{n_est}", nested=True):
+                model_gbr = GradientBoostingRegressor(n_estimators=n_est, max_depth=5, random_state=SEED)
+                logger.info(f"Entrenando candidato GBR con n_estimators={n_est}...")
+                model_gbr.fit(train[FEATURES], train[TARGET])
+                
+                y_pred_gbr = np.clip(model_gbr.predict(test_df[FEATURES]), 0, None)
+                metrics_gbr = regression_metrics(y_real, y_pred_gbr)
+                
+                mlflow.log_param("model_type", "GradientBoostingRegressor")
+                mlflow.log_param("n_estimators", n_est)
+                mlflow.log_metric("test_mae", metrics_gbr["mae"])
+                mlflow.log_metric("test_rmse", metrics_gbr["rmse"])
+                mlflow.log_metric("test_r2", metrics_gbr["r2"])
+                
+                tags_gbr = run_tags("P1")
+                tags_gbr.update({"stage_of_work": "candidate", "model_family": "gradient_boosting"})
+                mlflow.set_tags(tags_gbr)
 
 @app.command("p2")
 def train_p2(
@@ -809,6 +867,7 @@ def train_p2(
             C_values = [0.1, 1.0, 10.0]
             mejor_f1_val = -1
             mejor_C = None
+            mejor_umbral_global = 0.5 # Guardará el umbral óptimo
 
             for c_val in C_values:
                 with mlflow.start_run(run_name=f"p2-child-logreg-C{c_val}", nested=True):
@@ -821,8 +880,139 @@ def train_p2(
                         LogisticRegression(C=c_val, class_weight="balanced", random_state=SEED, max_iter=1000),
                     )
                     sub_model.fit(X_train, y_train)
+                    y_val_prob = sub_model.predict_proba(X_val)[:, 1]
                     
-                    # Evaluación en VALIDACIÓN para selección de hiperparámetros (sin fuga de test)
+                    # Buscar el mejor umbral en Validación
+                    f1_max_umbral = 0
+                    mejor_umbral = 0.5
+                    for umbral in np.linspace(0.3, 0.7, 41): # Prueba 41 umbrales entre 0.3 y 0.7
+                        y_val_pred_u = (y_val_prob >= umbral).astype(int)
+                        f1_u = f1_score(y_val, y_val_pred_u, average="macro", zero_division=0)
+                        if f1_u > f1_max_umbral:
+                            f1_max_umbral = f1_u
+                            mejor_umbral = umbral
+                    
+                    # Evaluar con el mejor umbral encontrado
+                    y_val_pred_opt = (y_val_prob >= mejor_umbral).astype(int)
+                    val_metrics = {
+                        "val_precision": precision_score(y_val, y_val_pred_opt, zero_division=0),
+                        "val_recall": recall_score(y_val, y_val_pred_opt, zero_division=0),
+                        "val_f1_macro": f1_max_umbral,
+                        "val_roc_auc": roc_auc_score(y_val, y_val_prob),
+                    }
+                    mlflow.log_param("C", c_val)
+                    mlflow.log_param("umbral_optimo_val", round(mejor_umbral, 3))
+                    mlflow.log_metrics(val_metrics)
+
+                    if val_metrics["val_f1_macro"] > mejor_f1_val:
+                        mejor_f1_val = val_metrics["val_f1_macro"]
+                        mejor_C = c_val
+                        mejor_umbral_global = mejor_umbral
+
+            # Entrenar modelo final y evaluar en TEST con el umbral óptimo
+            logger.info(f"Mejor C (Val): {mejor_C} | Mejor Umbral (Val): {mejor_umbral_global:.3f}")
+            mejor_modelo = make_pipeline(
+                StandardScaler(),
+                LogisticRegression(C=mejor_C, class_weight="balanced", random_state=SEED, max_iter=1000),
+            )
+            mejor_modelo.fit(X_train, y_train)
+            
+            y_prob = mejor_modelo.predict_proba(X_test)[:, 1]
+            y_pred = (y_prob >= mejor_umbral_global).astype(int) # Predicción con umbral ajustado
+
+            # val: con el mejor C y umbral ya elegidos, se reporta en val para la seleccion
+            y_val_prob = mejor_modelo.predict_proba(X_val)[:, 1]
+            y_val_pred = (y_val_prob >= mejor_umbral_global).astype(int)
+            val_metrics = {
+                "val_precision": precision_score(y_val, y_val_pred, zero_division=0),
+                "val_recall": recall_score(y_val, y_val_pred, zero_division=0),
+                "val_f1_macro": f1_score(y_val, y_val_pred, average="macro", zero_division=0),
+                "val_roc_auc": roc_auc_score(y_val, y_val_prob),
+            }
+
+            test_metrics = {
+                "test_precision": precision_score(y_test, y_pred, zero_division=0),
+                "test_recall": recall_score(y_test, y_pred, zero_division=0),
+                "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
+                "test_roc_auc": roc_auc_score(y_test, y_prob),
+            }
+            mlflow.log_param("best_C", mejor_C)
+            mlflow.log_param("umbral_final", round(mejor_umbral_global, 3))
+            mlflow.log_metrics(val_metrics)
+            mlflow.log_metrics(test_metrics)
+
+            signature = infer_signature(X_test, y_pred)
+            mlflow.sklearn.log_model(mejor_modelo, artifact_path="model", signature=signature, input_example=X_test.head(5))
+            
+            if MANIFEST_PATH.exists():
+                ds = mlflow.data.from_pandas(X_train, source=str(MANIFEST_PATH), name="mibici_p2_train")
+                mlflow.log_input(ds, context="training")
+
+            MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            joblib.dump(mejor_modelo, model_path)
+            mlflow.log_artifact(str(model_path), artifact_path="model")
+            
+            # Artefactos
+            FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+            plt.figure(figsize=(6, 6))
+            sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt="d", cmap="Blues")
+            plt.title(f"Matriz de Confusion - P2 (LOGREG Umbral {mejor_umbral_global:.2f})")
+            plt.xlabel("Prediccion del Riesgo")
+            plt.ylabel("Riesgo Real")
+            artifact_path = FIGURES_DIR / "matriz_confusion_p2_logreg.png"
+            plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
+            mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
+            plt.close()
+
+            # Curva PR con el umbral marcado
+            fig, ax = plt.subplots(figsize=(6, 5))
+            PrecisionRecallDisplay.from_predictions(
+                y_test, y_prob, name="LogReg", plot_chance_level=True, drop_intermediate=True, ax=ax
+            )
+            # Dibujar el punto exacto de nuestro umbral óptimo (ya calculado en y_pred)
+            precision_opt = precision_score(y_test, y_pred, zero_division=0)
+            recall_opt = recall_score(y_test, y_pred, zero_division=0)
+            
+            ax.plot(recall_opt, precision_opt, 'ro', markersize=8, label=f'Umbral {mejor_umbral_global:.2f} (Val)')
+            ax.legend()
+                
+            ax.set_title("Curva Precision-Recall - P2 (LOGREG)")
+            pr_path = FIGURES_DIR / "curva_pr_p2_logreg.png"
+            fig.savefig(pr_path, dpi=150, bbox_inches="tight")
+            mlflow.log_artifact(str(pr_path), artifact_path="classification_artifacts")
+            plt.close(fig)
+            mlflow.log_metric("test_average_precision", average_precision_score(y_test, y_prob))
+
+            logger.success(f"Búsqueda nested runs P2 finalizada. Mejor F1 Macro (Val): {mejor_f1_val:.3f}")
+    # Nuevo modelo elgido "rf"
+    elif model_name == "rf":
+        from sklearn.ensemble import RandomForestClassifier
+        with mlflow.start_run(run_name="P2-parent-search-rf"):
+            parent_tags = run_tags("P2")
+            parent_tags.update({"model_family": "random_forest", "stage_of_work": "search"})
+            mlflow.set_tags(parent_tags)
+            mlflow.log_params(split_params())
+            mlflow.log_params(data_params())
+            mlflow.log_params({
+                "modelo": model_name,
+                "random_state": SEED,
+                "risk_horizon_hours": RISK_HORIZON_HOURS,
+                "risk_alpha": RISK_ALPHA,
+            })
+
+            n_estimators_list = [50, 100, 200]
+            mejor_f1_val = -1
+            mejor_n = None
+
+            for n_est in n_estimators_list:
+                with mlflow.start_run(run_name=f"p2-child-rf-n{n_est}", nested=True):
+                    child_tags = run_tags("P2")
+                    child_tags.update({"model_family": "random_forest", "stage_of_work": "candidate"})
+                    mlflow.set_tags(child_tags)
+                    
+                    sub_model = RandomForestClassifier(n_estimators=n_est, class_weight="balanced", random_state=SEED, max_depth=10)
+                    sub_model.fit(X_train, y_train)
+                    
                     y_val_pred = sub_model.predict(X_val)
                     y_val_prob = sub_model.predict_proba(X_val)[:, 1]
                     
@@ -832,24 +1022,20 @@ def train_p2(
                         "val_f1_macro": f1_score(y_val, y_val_pred, average="macro", zero_division=0),
                         "val_roc_auc": roc_auc_score(y_val, y_val_prob),
                     }
-                    mlflow.log_param("C", c_val)
+                    mlflow.log_param("n_estimators", n_est)
                     mlflow.log_metrics(val_metrics)
 
                     if val_metrics["val_f1_macro"] > mejor_f1_val:
                         mejor_f1_val = val_metrics["val_f1_macro"]
-                        mejor_C = c_val
+                        mejor_n = n_est
 
-            # Entrenar modelo final con el mejor C encontrado en val, evaluando una sola vez en TEST
-            logger.info(f"Mejor C encontrado en validación: {mejor_C}")
-            mejor_modelo = make_pipeline(
-                StandardScaler(),
-                LogisticRegression(C=mejor_C, class_weight="balanced", random_state=SEED, max_iter=1000),
-            )
+            logger.info(f"Mejor n_estimators encontrado en validación: {mejor_n}")
+            mejor_modelo = RandomForestClassifier(n_estimators=mejor_n, class_weight="balanced", random_state=SEED, max_depth=10)
             mejor_modelo.fit(X_train, y_train)
             y_pred = mejor_modelo.predict(X_test)
             y_prob = mejor_modelo.predict_proba(X_test)[:, 1]
 
-            # val: con el mejor C ya elegido, se reporta en val para la seleccion
+            # val: con el mejor n_estimators ya elegido, se reporta en val para la seleccion
             y_val_pred = mejor_modelo.predict(X_val)
             y_val_prob = mejor_modelo.predict_proba(X_val)[:, 1]
             val_metrics = {
@@ -865,50 +1051,13 @@ def train_p2(
                 "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
                 "test_roc_auc": roc_auc_score(y_test, y_prob),
             }
-            mlflow.log_param("best_C", mejor_C)
+            mlflow.log_param("best_n_estimators", mejor_n)
             mlflow.log_metrics(val_metrics)
             mlflow.log_metrics(test_metrics)
 
             signature = infer_signature(X_test, y_pred)
-            mlflow.sklearn.log_model(
-                mejor_modelo, 
-                artifact_path="model", 
-                signature=signature, 
-                input_example=X_test.head(5)
-            )
-            
-            if MANIFEST_PATH.exists():
-                ds = mlflow.data.from_pandas(X_train, source=str(MANIFEST_PATH), name="mibici_p2_train")
-                mlflow.log_input(ds, context="training")
-
-            MODELS_DIR.mkdir(parents=True, exist_ok=True)
-            joblib.dump(mejor_modelo, model_path)
-            mlflow.log_artifact(str(model_path), artifact_path="model")
-            
-            FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-            plt.figure(figsize=(6, 6))
-            sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt="d", cmap="Blues")
-            plt.title("Matriz de Confusion - P2 (LOGREG OPTIMIZADO)")
-            plt.xlabel("Prediccion del Riesgo")
-            plt.ylabel("Riesgo Real")
-            artifact_path = FIGURES_DIR / "matriz_confusion_p2_logreg.png"
-            plt.savefig(artifact_path, dpi=300, bbox_inches="tight")
-            mlflow.log_artifact(str(artifact_path), artifact_path="classification_artifacts")
-            plt.close()
-
-            # Curva precisión-recall en test: la matriz de confusión solo muestra el umbral 0.5
-            fig, ax = plt.subplots(figsize=(6, 5))
-            PrecisionRecallDisplay.from_predictions(
-                y_test, y_prob, name="LogReg", plot_chance_level=True, drop_intermediate=True, ax=ax
-            )
-            ax.set_title("Curva Precision-Recall - P2 (LOGREG OPTIMIZADO)")
-            pr_path = FIGURES_DIR / "curva_pr_p2_logreg.png"
-            fig.savefig(pr_path, dpi=150, bbox_inches="tight")
-            mlflow.log_artifact(str(pr_path), artifact_path="classification_artifacts")
-            plt.close(fig)
-            mlflow.log_metric("test_average_precision", average_precision_score(y_test, y_prob))
-
-            logger.success(f"Búsqueda nested runs P2 finalizada. Mejor F1 Macro en val: {mejor_f1_val:.3f}")
+            mlflow.sklearn.log_model(mejor_modelo, artifact_path="model", signature=signature, input_example=X_test.head(5))
+            logger.success(f"Búsqueda nested runs P2 RF finalizada. Mejor F1 Macro en val: {mejor_f1_val:.3f}")
     else:
         raise ValueError(f"Modelo no valido: {model_name}. Usar 'dummy' o 'logreg'.")
 
