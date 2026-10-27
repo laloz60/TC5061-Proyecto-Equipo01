@@ -58,6 +58,9 @@ security:
 	pip-audit -r requirements.txt >> reports/security/pip_audit_report.txt || true
 	@echo "Reportes guardados en reports/security/"
 
+## Run all unit tests, data validation and security checks
+.PHONY: check-all
+check-all: test security
 
 ## Set up Python interpreter environment
 .PHONY: create_environment
