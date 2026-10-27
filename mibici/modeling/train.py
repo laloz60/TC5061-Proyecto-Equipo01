@@ -10,6 +10,7 @@ Incluye soporte modular para atender las request de :
 """
 
 from abc import ABC, abstractmethod
+from datetime import timedelta
 from pathlib import Path
 
 import joblib
@@ -96,15 +97,51 @@ class KMeansClusterTrainer(BaseTrainer):
         self.init_method = init_method
         self.n_init = n_init
 
+    @staticmethod
+    def _perfil_ventana(df_trips, estaciones, n_stations):
+        """Matriz estacion x hora normalizada para las filas recibidas."""
+        if len(df_trips) == 0:
+            return np.zeros((n_stations, 24))
+
+        # Construimos la matriz de frecuencia: estación vs hora del día (0 a 23)
+        profile_counts = pd.crosstab(df_trips["origen_id"], df_trips["hora"])
+        profile_counts = profile_counts.reindex(columns=range(24), fill_value=0)
+
+        # Alineamos con el orden exacto de las estaciones de la nomenclatura
+        if estaciones is not None:
+            profile_counts = profile_counts.reindex(estaciones, fill_value=0)
+
+        # Normalizamos por fila (proporción de viajes por hora que realiza cada estación)
+        row_sums = profile_counts.sum(axis=1)
+        row_sums[row_sums == 0] = 1  # Evitamos división por cero
+        return profile_counts.div(row_sums, axis=0).values
+
+    @staticmethod
+    def _silhouette_o_nan(X, labels):
+        """Silhouette score; NaN si la ventana no da condiciones para calcularlo."""
+        if len(X) < 2 or len(np.unique(labels)) < 2:
+            return float("nan")
+        return silhouette_score(X, labels)
+
     def load_data(self, input_path: Path):
-        """Carga la nomenclatura y calcula perfiles horarios reales desde el histórico de viajes."""
+        """Carga la nomenclatura y calcula perfiles horarios POR VENTANA (train/val/test).
+
+        El split temporal es el de config.py: train 2023-05..2024-12,
+        val 2025-01..2025-06, test 2025-07..2026-09. Así el KMeans se ajusta
+        en train y la selección se evalúa en val, sin mirar test.
+        """
         logger.info(f"Cargando datos espaciales desde: {input_path}")
 
+        from mibici.config import DATA_END, DATA_START, TRAIN_END, UNIFIED_TRIPS_PATH, VAL_END
+
+        estaciones = None
         if input_path.exists():
             df_nom = pd.read_parquet(input_path)
             n_stations = len(df_nom)
             lats = df_nom["latitud"].values
             lons = df_nom["longitud"].values
+            if "estacion_id" in df_nom.columns:
+                estaciones = df_nom["estacion_id"]
             logger.success(f"Nomenclatura cargada exitosamente ({n_stations} estaciones activas).")
         else:
             logger.warning(
@@ -115,35 +152,36 @@ class KMeansClusterTrainer(BaseTrainer):
             lons = np.random.uniform(-103.42, -103.30, n_stations)
 
         # Intentar calcular perfiles horarios reales desde el parquet de viajes unificados del equipo
-        from mibici.config import UNIFIED_TRIPS_PATH
-
         if UNIFIED_TRIPS_PATH.exists():
             logger.info(f"Calculando perfiles horarios reales desde: {UNIFIED_TRIPS_PATH}")
             # Leemos únicamente las columnas necesarias para optimizar memoria
             df_trips = pd.read_parquet(UNIFIED_TRIPS_PATH, columns=["inicio_viaje", "origen_id"])
-            df_trips["hora"] = pd.to_datetime(df_trips["inicio_viaje"]).dt.hour
+            df_trips["inicio_viaje"] = pd.to_datetime(df_trips["inicio_viaje"])
+            df_trips["hora"] = df_trips["inicio_viaje"].dt.hour
 
-            # Construimos la matriz de frecuencia: estación vs hora del día (0 a 23)
-            profile_counts = pd.crosstab(df_trips["origen_id"], df_trips["hora"])
-            profile_counts = profile_counts.reindex(columns=range(24), fill_value=0)
-
-            # Alineamos con el orden exacto de las estaciones de la nomenclatura
-            if "estacion_id" in df_nom.columns:
-                profile_counts = profile_counts.reindex(df_nom["estacion_id"], fill_value=0)
-
-            # Normalizamos por fila (proporción de viajes por hora que realiza cada estación)
-            row_sums = profile_counts.sum(axis=1)
-            row_sums[row_sums == 0] = 1  # Evitamos división por cero
-            X_profiles = (profile_counts.div(row_sums, axis=0)).values
-            logger.success("Perfiles horarios reales calculados y normalizados exitosamente.")
+            ventanas = {
+                "train": (DATA_START, TRAIN_END),
+                "val": (TRAIN_END + timedelta(days=1), VAL_END),
+                "test": (VAL_END + timedelta(days=1), DATA_END),
+            }
+            perfiles = {}
+            for nombre, (inicio, fin) in ventanas.items():
+                mask = (df_trips["inicio_viaje"] >= pd.Timestamp(inicio)) & (
+                    df_trips["inicio_viaje"] < pd.Timestamp(fin) + pd.Timedelta(days=1)
+                )
+                perfiles[nombre] = self._perfil_ventana(df_trips[mask], estaciones, n_stations)
+            logger.success(
+                "Perfiles horarios calculados por ventana: train/val/test (split temporal)."
+            )
         else:
             logger.warning(
                 "No se encontró el archivo de viajes unificados. Usando datos sintéticos para perfiles."
             )
             np.random.seed(SEED)
-            X_profiles = np.random.rand(n_stations, 24)
+            sintetico = np.random.rand(n_stations, 24)
+            perfiles = {nombre: sintetico for nombre in ("train", "val", "test")}
 
-        return X_profiles, lats, lons
+        return perfiles, lats, lons
 
     def train_model(self, X_profiles: np.ndarray):
         """Ajusta el modelo K-Means respetando los hiperparámetros y la semilla global."""
@@ -166,13 +204,17 @@ class KMeansClusterTrainer(BaseTrainer):
     def evaluate_and_log(
         self,
         kmeans_model: KMeans,
-        X_profiles: np.ndarray,
+        perfiles: dict,
         labels: np.ndarray,
         lats: np.ndarray,
         lons: np.ndarray,
         model_path: Path,
     ):
-        """Calcula el Silhouette Score, serializa el modelo y registra artefactos y trazabilidad completa en MLflow."""
+        """Silhouette en VAL para la selección, en TEST solo para el reporte.
+
+        El modelo ya viene ajustado con los perfiles de train; aquí se predice
+        sobre las ventanas de val y test para medir sin fuga de información.
+        """
 
         from mibici.modeling.tracking import data_params, run_tags, split_params
 
@@ -195,22 +237,28 @@ class KMeansClusterTrainer(BaseTrainer):
             # Etiquetas obligatorias (tags): equipo, pregunta y commit real dinámico
             mlflow.set_tags(run_tags("P3"))
 
-            # Métrica cuantitativa de clustering
-            sil_score = silhouette_score(X_profiles, labels)
-            mlflow.log_metric("test_silhouette_score", sil_score)
-            logger.success(f"Evaluación P3 completada. Silhouette Score: {sil_score:.4f}")
+            # Métricas de clustering: VAL decide, TEST solo se reporta
+            labels_val = kmeans_model.predict(perfiles["val"])
+            labels_test = kmeans_model.predict(perfiles["test"])
+            sil_val = self._silhouette_o_nan(perfiles["val"], labels_val)
+            sil_test = self._silhouette_o_nan(perfiles["test"], labels_test)
+            mlflow.log_metric("val_silhouette_score", sil_val)
+            mlflow.log_metric("test_silhouette_score", sil_test)
+            logger.success(
+                f"Evaluación P3 completada. Silhouette val={sil_val:.4f} test={sil_test:.4f}"
+            )
 
-            signature = infer_signature(X_profiles, labels)
+            signature = infer_signature(perfiles["train"], labels)
             mlflow.sklearn.log_model(
                 kmeans_model, 
                 artifact_path="model", 
                 signature=signature, 
-                input_example=X_profiles[:5]
+                input_example=perfiles["train"][:5]
             )
 
             if MANIFEST_PATH.exists():
                 dataset_source = mlflow.data.from_pandas(
-                    pd.DataFrame(X_profiles), 
+                    pd.DataFrame(perfiles["train"]), 
                     source=str(MANIFEST_PATH), 
                     name="mibici_p3_profiles"
                 )
@@ -224,8 +272,8 @@ class KMeansClusterTrainer(BaseTrainer):
             mlflow.sklearn.log_model(
                 sk_model=kmeans_model,
                 name="model",
-                signature=infer_signature(X_profiles, labels),
-                input_example=X_profiles[:5],
+                signature=infer_signature(perfiles["train"], labels),
+                input_example=perfiles["train"][:5],
             )
 
             # Generación de Artefacto Visual (Mapa de Clústeres)
@@ -249,9 +297,10 @@ class KMeansClusterTrainer(BaseTrainer):
 
     def run_pipeline(self, input_path: Path, model_path: Path):
         """Ejecuta el pipeline completo de entrenamiento de punta a punta."""
-        X_profiles, lats, lons = self.load_data(input_path)
-        kmeans_model, labels = self.train_model(X_profiles)
-        self.evaluate_and_log(kmeans_model, X_profiles, labels, lats, lons, model_path)
+        perfiles, lats, lons = self.load_data(input_path)
+        # el ajuste es SOLO con la ventana de train
+        kmeans_model, labels = self.train_model(perfiles["train"])
+        self.evaluate_and_log(kmeans_model, perfiles, labels, lats, lons, model_path)
 
 
 # =====================================================================
@@ -283,7 +332,6 @@ def train_p3_search(
     import json
 
     import matplotlib.pyplot as plt
-    from sklearn.metrics import silhouette_score
 
     from mibici.config import FIGURES_DIR, MODELS_DIR
     from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
@@ -292,7 +340,7 @@ def train_p3_search(
     
     # TRAINER
     trainer = KMeansClusterTrainer(n_clusters=5, init_method="k-means++", n_init=10)
-    X_profiles, lats, lons = trainer.load_data(input_path)
+    perfiles, lats, lons = trainer.load_data(input_path)
     
     # CORRIDA PADRE
     with mlflow.start_run(run_name="p3-parent-search-kmeans"):
@@ -307,19 +355,24 @@ def train_p3_search(
         # CORRIDAS HIJAS ITERADAS
         for k in k_values:
             with mlflow.start_run(run_name=f"p3-candidate-k{k}", nested=True):
-                # ACTUAL CANDIDADTO
+                # ACTUAL CANDIDADTO: se ajusta en train y se evalúa en val
                 kmeans_model, labels = KMeansClusterTrainer(
                     n_clusters=k, init_method="k-means++", n_init=10
-                ).train_model(X_profiles)
+                ).train_model(perfiles["train"])
                 
-                sil_score = silhouette_score(X_profiles, labels)
+                labels_val = kmeans_model.predict(perfiles["val"])
+                sil_val = KMeansClusterTrainer._silhouette_o_nan(perfiles["val"], labels_val)
+                sil_test = KMeansClusterTrainer._silhouette_o_nan(
+                    perfiles["test"], kmeans_model.predict(perfiles["test"])
+                )
                 
                 # Registramos parámetros y métricas
                 mlflow.log_param("model_type", "KMeans")
                 mlflow.log_param("n_clusters", k)
                 mlflow.log_param("init_method", "k-means++")
                 mlflow.log_param("n_init", 10)
-                mlflow.log_metric("test_silhouette_score", sil_score)
+                mlflow.log_metric("val_silhouette_score", sil_val)
+                mlflow.log_metric("test_silhouette_score", sil_test)
                 
                 # Etiquetas obligatorias
                 mlflow.set_tags(run_tags("P3"))
@@ -327,8 +380,8 @@ def train_p3_search(
                 mlflow.set_tag("model_family", "kmeans")
 
                 # Firma
-                signature = infer_signature(X_profiles, labels)
-                input_example = X_profiles[:5]
+                signature = infer_signature(perfiles["train"], labels)
+                input_example = perfiles["train"][:5]
 
                 # Carpeta de datos
                 signature_dir = MODELS_DIR / f"signature_metadata_k{k}"
@@ -388,7 +441,10 @@ def train_p3_search(
                 mlflow.log_artifact(str(dist_path), artifact_path="clustering_artifacts")
                 mlflow.log_artifact(str(clusters_path), artifact_path="clustering_artifacts")
                 
-                logger.success(f"Nested run y artefactos guardados para K={k} con Silhouette: {sil_score:.4f}")
+                logger.success(
+                    f"Nested run y artefactos guardados para K={k} "
+                    f"con Silhouette val={sil_val:.4f} test={sil_test:.4f}"
+                )
 
 @app.command("p1")
 def train_p1(
@@ -427,7 +483,7 @@ def train_p1_search(
     warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.utils.parallel") # Ignorar la advertencia
     mlflow.set_experiment(EXPERIMENT_NAME)
     
-    train, _, _ = load_p1_data(features_path) # Cargar train
+    train, val, _ = load_p1_data(features_path) # Cargar train y val
     
     df_full = pd.read_parquet(features_path)  # Cargar test
     test_df = df_full[df_full["split"] == "test"].copy()
@@ -435,6 +491,7 @@ def train_p1_search(
     test_df[FEATURES] = test_df[FEATURES].fillna(0) # Rellena NAS
     
     y_real = test_df[TARGET].to_numpy()
+    y_val = val[TARGET].to_numpy()
     
     print(f"\nTest shape: {test_df.shape} | y_real min: {y_real.min()}, max: {y_real.max()}, mean: {y_real.mean():.2f}\n")
 
@@ -456,6 +513,10 @@ def train_p1_search(
                 logger.info(f"Entrenando candidato RF con n_estimators={n_est}...")
                 model.fit(train[FEATURES], train[TARGET])
                 
+                # seleccion en VALIDACION: el test queda para el reporte final
+                y_pred_val = np.clip(model.predict(val[FEATURES]), 0, None)
+                val_metrics = regression_metrics(y_val, y_pred_val)
+
                 y_pred = model.predict(test_df[FEATURES])
                 y_pred = np.clip(y_pred, 0, None)
                 
@@ -465,6 +526,9 @@ def train_p1_search(
                 mlflow.log_param("n_estimators", n_est)
                 mlflow.log_param("max_depth", 16)
                 mlflow.log_param("min_samples_leaf", 20)
+                mlflow.log_metric("val_mae", val_metrics["mae"])
+                mlflow.log_metric("val_rmse", val_metrics["rmse"])
+                mlflow.log_metric("val_r2", val_metrics["r2"])
                 mlflow.log_metric("test_mae", metrics["mae"])
                 mlflow.log_metric("test_rmse", metrics["rmse"])
                 mlflow.log_metric("test_r2", metrics["r2"])
@@ -691,8 +755,13 @@ def train_p2(
             
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
+            y_pred_val = model.predict(X_val)
             
             metricas = {
+                "val_precision": precision_score(y_val, y_pred_val, zero_division=0),
+                "val_recall": recall_score(y_val, y_pred_val, zero_division=0),
+                "val_f1_macro": f1_score(y_val, y_pred_val, average="macro", zero_division=0),
+                "val_roc_auc": 0.5,
                 "test_precision": precision_score(y_test, y_pred, zero_division=0),
                 "test_recall": recall_score(y_test, y_pred, zero_division=0),
                 "test_f1_macro": f1_score(y_test, y_pred, average="macro", zero_division=0),
@@ -780,6 +849,16 @@ def train_p2(
             y_pred = mejor_modelo.predict(X_test)
             y_prob = mejor_modelo.predict_proba(X_test)[:, 1]
 
+            # val: con el mejor C ya elegido, se reporta en val para la seleccion
+            y_val_pred = mejor_modelo.predict(X_val)
+            y_val_prob = mejor_modelo.predict_proba(X_val)[:, 1]
+            val_metrics = {
+                "val_precision": precision_score(y_val, y_val_pred, zero_division=0),
+                "val_recall": recall_score(y_val, y_val_pred, zero_division=0),
+                "val_f1_macro": f1_score(y_val, y_val_pred, average="macro", zero_division=0),
+                "val_roc_auc": roc_auc_score(y_val, y_val_prob),
+            }
+
             test_metrics = {
                 "test_precision": precision_score(y_test, y_pred, zero_division=0),
                 "test_recall": recall_score(y_test, y_pred, zero_division=0),
@@ -787,6 +866,7 @@ def train_p2(
                 "test_roc_auc": roc_auc_score(y_test, y_prob),
             }
             mlflow.log_param("best_C", mejor_C)
+            mlflow.log_metrics(val_metrics)
             mlflow.log_metrics(test_metrics)
 
             signature = infer_signature(X_test, y_pred)

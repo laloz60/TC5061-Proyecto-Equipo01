@@ -178,13 +178,13 @@ Notas:
 
 ### Model Registry
 
-`mlflow run . -e register` (`mibici/modeling/register.py`) registra el mejor run de cada pregunta según su métrica de test:
+`mlflow run . -e register` (`mibici/modeling/register.py`) registra el mejor run de cada pregunta según su métrica de **validación** (la selección no mira test; esa ventana queda solo para el reporte final):
 
 | Pregunta | Modelo registrado | Métrica de selección |
 |---|---|---|
-| P1 | `mibici-equipo01-p1-demanda` | `test_mae` (menor es mejor) |
-| P2 | `mibici-equipo01-p2-riesgo` | `test_roc_auc` (mayor es mejor) |
-| P3 | `mibici-equipo01-p3-grupos` | `test_silhouette_score` (mayor es mejor) |
+| P1 | `mibici-equipo01-p1-demanda` | `val_mae` (menor es mejor) |
+| P2 | `mibici-equipo01-p2-riesgo` | `val_roc_auc` (mayor es mejor) |
+| P3 | `mibici-equipo01-p3-grupos` | `val_silhouette_score` (mayor es mejor) |
 
 - Busca primero entre las corridas con tag `stage_of_work=candidate`; si ninguna tiene modelo logueado, usa todas las corridas de la pregunta.
 - Cada versión lleva en su descripción el linaje: run de origen, commit y hashes del manifiesto y del Parquet.
