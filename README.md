@@ -14,7 +14,7 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 | P2 | ¿Una estación estará en riesgo de quedarse sin bicis/anclajes en un periodo futuro? | Clasificación | [@GemmaMartinez](https://github.com/GemmaMartinez) + [@smuciton](https://github.com/smuciton) |
 | P3 | ¿Qué grupos de estaciones comparten patrones de uso y dónde se ubican? | Clustering | [@JesusTafolla](https://github.com/JesusTafolla) |
 
-> **Reparto de P2:** es la tarea más pesada (diseño del proxy de riesgo + baseline de clasificación + evidencia MLflow), así que se divide en dos: **@smuciton** diseña y justifica el proxy de riesgo, es decir, la regla que define cuándo una estación está en riesgo de quedarse sin bicis o sin anclajes, y **@GemmaMartinez** implementa el baseline de clasificación que predice ese riesgo y registra su run en MLflow.
+> **Reparto de P2:** es la tarea más pesada (diseño del proxy de riesgo + baseline de clasificación + evidencia MLflow), así que se divide en dos: **@smuciton** diseña y justifica el proxy de riesgo (#6) y **@GemmaMartinez** implementa el baseline de clasificación con su run en MLflow (#7).
 
 ## Datos
 
@@ -157,16 +157,16 @@ mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P ques
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=dummy
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=random
 
-# 3. Búsquedas con nested runs (de aquí salen los modelos elegidos)
-mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e search -P question=p1   # RF, n_estimators 50,100,200
-mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e search -P question=p2   # LogReg, C 0.1,1,10
-mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e search -P question=p3   # K-Means++, K 3,4,5,6
+# 3. Modelo elegido de cada pregunta
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p1 -P model=rf -P n_estimators=300
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=logreg
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=k-means++ -P n_init=10
 
 # 4. Model Registry
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e register
 ```
 
-Valores de `model` por pregunta (vacío = baseline): p1 `ridge` | `rf` · p2 `dummy` | `logreg` · p3 `random` | `k-means++`. El entry point `search` crea un run padre por búsqueda y un run hijo por valor (tags `stage_of_work=search` y `candidate`); con `-P grid=...` se cambia la malla, p. ej. `-P question=p3 -P grid=3,4`. Un candidato suelto, fuera de búsqueda, se entrena con `train` (p. ej. `-e train -P question=p1 -P model=rf -P n_estimators=200`). Los parámetros completos de cada entry point están en el `MLproject`; los defaults (rutas, fechas, semilla) viven en `mibici/config.py`.
+Valores de `model` por pregunta (vacío = baseline): p1 `ridge` | `rf` · p2 `dummy` | `logreg` · p3 `random` | `k-means++`. Los parámetros completos de cada entry point están en el `MLproject`; los defaults (rutas, fechas, semilla) viven en `mibici/config.py`.
 
 Notas:
 
@@ -175,6 +175,8 @@ Notas:
 - **`features` es obligatorio** antes de entrenar P1 y P2. Sus runs (y los de `ingest`) no registran métricas ni parámetros: solo dejan trazabilidad de commit y entry point.
 - **Tiempos de referencia** (Windows, conexión doméstica): ingesta completa ~7.5 min (descarga ~6 min), features ~1 min, P2 `logreg` ~4.5 min, P3 <1 min.
 - **Datos de la fuente:** MiBici puede actualizar CSV ya publicados. Al 22 oct 2026, el de 2023-05 trae 26 viajes más que el registrado en `data/manifest.json` (15,376,153 vs 15,376,127 en total), así que una descarga nueva produce otros hashes y `pytest` marca esa diferencia (ver [Descarga de datos](#descarga-de-datos) para validar con tus datos). El manifiesto versionado es la referencia del equipo: **no lo commitees al re-ejecutar la ingesta** (`git restore data/manifest.json`).
+
+La salida completa de estos comandos en un clon limpio (comando, respuesta del log y resultado de cada paso) está en [`reports/validacion_clon_limpio_issue62.md`](reports/validacion_clon_limpio_issue62.md).
 
 ### Model Registry
 
@@ -196,13 +198,9 @@ Notas:
   modelo = mlflow.pyfunc.load_model("models:/mibici-equipo01-p2-riesgo@champion")
   ```
 
-  `register.py` asigna el alias `@champion` a cada versión que registra. Se usan aliases en lugar de etapas porque las etapas (`Staging`/`Production`) están deprecadas desde MLflow 2.9; promover otra versión es solo mover el alias, sin cambiar el código que carga el modelo.
-
-  > El alias solo se asigna al crear una versión nueva. Si el run ya estaba registrado, `register` lo omite (`ya esta registrado desde este run; se omite`) y no toca los aliases: en un `mlflow.db` con modelos registrados por una versión anterior de `register.py` (que no asignaba el alias), bórralos y vuelve a correr `register`, o asigna el alias en la UI (Model registry → versión → *Add alias*).
-
 ### Ejecución directa (sin MLflow Project)
 
-Útil para desarrollo. Para reproducir la entrega usa los comandos `mlflow run` de arriba: las búsquedas con nested runs se lanzan con `-e search` (internamente llama a `python -m mibici.modeling.train p1-search` / `p3-search`).
+Útil para desarrollo. Para reproducir la entrega usa los comandos `mlflow run` de arriba. Las búsquedas con nested runs de P1 y P3 hoy solo se lanzan así: `python -m mibici.modeling.train p1-search` y `python -m mibici.modeling.train p3-search`.
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
@@ -240,6 +238,19 @@ reports/figures/mlflow_evidencia/
 - **Config centralizada**: rutas, cortes de fechas y `SEED` se leen de `mibici/config.py`, sin duplicarlos en `mibici/dataset.py` ni en `mibici/modeling/`.
 - **`.gitignore`**: excluye los datos MiBici (`/data/*`, salvo `data/manifest.json`), `mlruns/`, `mlartifacts/`, `.env` y los modelos serializados (`models/*.pkl`, `models/*.joblib`, `models/*.onnx`, `models/*.bin`).
 - **Versionado de datos**: `data/manifest.json` guarda el SHA-256 del parquet unificado y de la nomenclatura, con el total de viajes y estaciones. Es lo único de `data/` que entra al repo.
+
+## Seguridad y Calidad del Código
+
+Para garantizar que el repositorio no exponga credenciales ni dependencias vulnerables, integramos herramientas de análisis estático y auditoría de seguridad:
+
+- **Chequeo de credenciales (Issue #102):** El archivo `.gitignore` excluye explícitamente `.env`, bases de datos locales (`mlflow.db`) y datos crudos (`data/raw/`). Se verificó en el historial mediante `git ls-files` que no existen secretos expuestos. Asimismo, una búsqueda con `git grep` descartó credenciales hardcodeadas.
+- **Análisis estático (Bandit v1.8.0):** Se ejecuta sobre el directorio `mibici/`. Se detectaron 5 alertas de severidad baja (Low) asociadas al uso de `subprocess` en `tracking.py` y `mlflow_entry.py`. **Justificación (Issue #101):** Estas alertas se asumen como seguras ya que los subprocesos solo ejecutan comandos internos de infraestructura (`git rev-parse HEAD` y llamadas nativas a Python), sin procesar *input* externo no confiable.
+- **Auditoría de dependencias (pip-audit v2.7.3):** El escaneo inicial detectó la vulnerabilidad *CVE-2026-53995* en la librería `mlflow` (v3.17.0). **Resolución:** Se mitigó el riesgo actualizando la dependencia a `mlflow==3.17.2` en el archivo `requirements.txt`, resultando en una auditoría limpia.
+
+Para ejecutar automatizadamente los chequeos de seguridad (Issue #101), utiliza el siguiente comando de `make`:
+```bash
+make security
+
 
 ## Estructura del proyecto
 
@@ -288,11 +299,9 @@ reports/figures/mlflow_evidencia/
 
 ## Integrantes y responsabilidades
 
-| Integrante | GitHub | Propuesta del proyecto | Experimentos con MLflow |
-|------------|--------|------------------------|-------------------------|
-| Gerardo Lozano | [@laloz60](https://github.com/laloz60) | Scaffold CCDS, ingesta reproducible con manifiesto SHA-256 y sus pruebas, `features.py` sin fuga temporal, P1: variable objetivo y baseline de regresión, notebook de exploración, buenas prácticas del README | Servidor de tracking con SQLite, `python_env.yaml`, `MLproject` con entry points, registro de los 3 modelos en el Model Registry con linaje, aviso de re-ingesta |
-| Gemma Martínez | [@GemmaMartinez](https://github.com/GemmaMartinez) | P2: baseline de clasificación, evidencia MLflow (capturas de runs, artefactos y comparación) | Candidatas de P1 y P3 con nested runs, artefactos de la candidata de P1 (firma, manifiesto, gráficas y configuración), justificación del mejor modelo de cada pregunta |
-| Jesús Tafolla | [@JesusTafolla](https://github.com/JesusTafolla) | ML Canvas, P3: clustering de estaciones y mapa de grupos, propuesta de modelos y métricas, trazabilidad de los runs (fechas, versión de datos y commit), referencias APA 7 | Candidatas de P2 con nested runs, artefactos de las candidatas de P2 y P3, modelos en producción con alias `@champion`, justificación del mejor modelo de cada pregunta |
-| smuciton | [@smuciton](https://github.com/smuciton) | Definición de datos y condiciones de uso, diagrama de arquitectura, P2: diseño y documento del proxy de riesgo | README de reproducción con `mlflow run` y validación en clon limpio, capturas de MLflow para el reporte, reporte de experimentos en PDF, checklist de entrega y subida a Canvas |
-
-Todos: flujo de trabajo con PR y review por integrante, y revisión conjunta de la propuesta en PDF.
+| Integrante | GitHub | Responsabilidades |
+|------------|--------|-------------------|
+| Gerardo Lozano | [@laloz60](https://github.com/laloz60) | Infra e ingesta de datos, `features.py`, P1 baseline de regresión, README |
+| Gemma Martínez | [@GemmaMartinez](https://github.com/GemmaMartinez) | P2 — baseline de clasificación (#7), evidencia MLflow (#11) |
+| Jesús Tafolla | [@JesusTafolla](https://github.com/JesusTafolla) | Clustering P3 (#8), propuesta de modelos y métricas (#9) |
+| smuciton | [@smuciton](https://github.com/smuciton) | Definición de datos y condiciones de uso (#2), diagrama de arquitectura (#3), P2 — proxy de riesgo (#6) |
