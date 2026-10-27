@@ -230,6 +230,20 @@ Las capturas de pantalla de los *runs*, artefactos y comparación de modelos se 
 reports/figures/mlflow_evidencia/
 ```
 
+### Comparación de Familias de Modelos
+
+Explorarando múltiples algoritmos, el pipeline de entrenamiento ahora compara distintas familias de modelos utilizando *nested runs* en MLflow para cada pregunta de investigación:
+
+- **P1 (Regresión):** Se compara el baseline (`Ridge`) contra `RandomForestRegressor` y la nueva familia `GradientBoostingRegressor`.
+- **P2 (Clasificación):** Se compara el baseline (`Dummy`) contra `LogisticRegression` y la nueva familia `RandomForestClassifier`.
+- **P3 (Clustering):** Se compara el baseline (`KMeans` con inicialización aleatoria) contra `KMeans++` y la nueva familia `GaussianMixture`.
+
+Para ejecutar las búsquedas de hiperparámetros y registrar los candidatos de estas nuevas familias en tu servidor local de MLflow, ejecuta:
+```bash
+python -m mibici.modeling.train p1-search
+python -m mibici.modeling.train p2 --model-name rf
+python -m mibici.modeling.train p3-search
+
 ## Buenas prácticas
 
 - **Métricas**: se nombran con el conjunto donde se calculan, `<split>_<métrica>` — `test_rmse`, `test_roc_auc`, `test_silhouette_score` (ver `mibici/modeling/train.py`).
