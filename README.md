@@ -251,6 +251,15 @@ Para ejecutar automatizadamente los chequeos de seguridad (Issue #101), utiliza 
 ```bash
 make security
 
+## Ejecución de Pruebas y Chequeos de Seguridad
+
+Para garantizar la calidad y seguridad del código, este repositorio integra pruebas unitarias, validación de datos y análisis estático. Todo el flujo está orquestado mediante `Make`.
+
+### Instrucciones de ejecución
+Desde la raíz del repositorio, ejecuta el siguiente comando unificado:
+```bash
+make check-all
+
 
 ## Estructura del proyecto
 
