@@ -39,7 +39,7 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 ```bash
 git clone https://github.com/laloz60/TC5061-Proyecto-Equipo01.git
 cd TC5061-Proyecto-Equipo01
-python3.12 -m venv .venv
+python3.12 -m venv .venv         # PowerShell: python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt  # instala también el paquete mibici (-e .)
 ```
@@ -138,6 +138,108 @@ Las capturas de pantalla de los *runs*, artefactos y comparación de modelos se 
 reports/figures/mlflow_evidencia/
 ```
 
+## Pruebas de calidad y seguridad
+El proyecto incluye un conjunto de pruebas con `pytest`, suites de validación de datos/modelado `DeepChecks`.
+
+**Estructura de `test/`**
+- `test/test_data.py`: Pruebas para la datos de MiBici, validación de SHA-256 e integridad del parquet unificado, comportamiento del CLI.
+- `test/test_features.py`: Validación completa de características (tiempo por estación y hora), cálculo de variables, lags y la correcta generación de etiquetas de riesgo para clasificación (P2).
+- `test/test_modeling.py`: Verificación de los parámetros de tiempo de los splits, control de integridad mediante el hash, tags y validación de métricas de regresión.
+
+**Comando para ejecutar**
+Ya estando en el entorno virtual, es necesario ejecutar
+
+1. Pruebas unitarias `pytest`
+  ```bash
+pytest -v
+  ```
+
+Salida ejemplo
+  ```bash
+=================================== test session starts ===================================
+platform win32 -- Python 3.12.2, pytest-9.1.1, pluggy-1.7.0 -- D:\MNA\TC5061-Proyecto-Equipo01\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\MNA\TC5061-Proyecto-Equipo01
+configfile: pyproject.toml
+plugins: anyio-4.15.1, platformdirs-4.13.7
+collected 29 items
+
+tests/test_data.py::test_catalog_cover_post_pandemic_history PASSED                      [  3%]
+tests/test_data.py::test_normalize_columns_canonical_schema PASSED                       [  6%]
+tests/test_data.py::test_normalize_columns_mangled_header_2023_04 PASSED                 [ 10%]
+tests/test_data.py::test_unified_parquet_exists_and_is_non_empty PASSED                  [ 13%]
+tests/test_data.py::test_manifest_is_versioned_and_complete PASSED                       [ 17%]
+tests/test_data.py::test_output_paths_limit_escribe_aparte PASSED                        [ 20%]
+tests/test_data.py::test_read_csv_normalized_handles_null_literals PASSED                [ 24%]
+tests/test_data.py::test_cli_aborts_without_force_when_parquet_exists PASSED             [ 27%]
+tests/test_data.py::test_cli_force_skips_confirmation_and_runs PASSED                    [ 31%]
+tests/test_data.py::test_fechas_dia_mes PASSED                                           [ 34%]
+tests/test_data.py::test_fechas_iso PASSED                                               [ 37%]
+tests/test_data.py::test_fechas_formato_desconocido PASSED                               [ 41%]
+tests/test_features.py::test_horas_sin_viajes_quedan_en_cero PASSED                      [ 44%]
+tests/test_features.py::test_estacion_empieza_en_su_primer_viaje PASSED                  [ 48%]
+tests/test_features.py::test_llegadas_despues_del_fin_no_se_cuentan PASSED               [ 51%]
+tests/test_features.py::test_calendario PASSED                                           [ 55%]
+tests/test_features.py::test_lags_y_media_movil PASSED                                   [ 58%]
+tests/test_features.py::test_promedio_misma_hora_semanas_anteriores PASSED               [ 62%]
+tests/test_features.py::test_neto PASSED                                                 [ 65%]
+tests/test_features.py::test_sin_fuga_de_informacion PASSED                              [ 68%]
+tests/test_features.py::test_datos_de_estacion PASSED                                    [ 72%]
+tests/test_features.py::test_split PASSED                                                [ 75%]
+tests/test_features.py::test_etiqueta_de_riesgo PASSED                                   [ 79%]
+tests/test_features.py::test_riesgo_no_mezcla_estaciones_ni_usa_estaciones_sin_capacidad PASSED     [ 82%]
+tests/test_modeling.py::test_fechas_de_config PASSED                                     [ 86%]
+tests/test_modeling.py::test_hash_del_parquet PASSED                                     [ 89%]
+tests/test_modeling.py::test_tags PASSED                                                 [ 93%]
+tests/test_modeling.py::test_metricas_prediccion_perfecta PASSED                         [ 96%]
+tests/test_modeling.py::test_modelo_no_soportado PASSED                                  [100%]
+
+=================================== 29 passed in 57.33s ===================================
+  ```
+
+Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\pytest`
+![Pytest Success](reports/figures/evidencia_pruebas_calidad_seguridad/pytest.png)
+  
+2. Pruebas de Modelado e Integridad `DeepChecks`
+  ```bash
+pytest tests/test_modeling.py -v
+  ```
+
+Salida ejemplo
+  ```bash
+=================================== test session starts ===================================
+platform win32 -- Python 3.12.2, pytest-9.1.1, pluggy-1.7.0 -- D:\MNA\TC5061-Proyecto-Equipo01\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\MNA\TC5061-Proyecto-Equipo01
+configfile: pyproject.toml
+plugins: anyio-4.15.1, platformdirs-4.13.7
+collected 5 items
+
+tests/test_modeling.py::test_fechas_de_config PASSED                                     [ 20%]
+tests/test_modeling.py::test_hash_del_parquet PASSED                                     [ 40%]
+tests/test_modeling.py::test_tags PASSED                                                 [ 60%]
+tests/test_modeling.py::test_metricas_prediccion_perfecta PASSED                         [ 80%]
+tests/test_modeling.py::test_modelo_no_soportado PASSED                                  [100%]
+
+=================================== 5 passed in 10.22s ====================================
+  ```
+
+Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\DeepChecks.png`
+![DeepChecks Success](reports/figures/evidencia_pruebas_calidad_seguridad/DeepChecks.png)
+
+3. Análisis de calidad
+  ```bash
+ruff check .
+  ```
+
+Salida ejemplo
+  ```bash
+All checks passed!
+  ```
+
+Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\ruff.png`
+![Security Success](reports/figures/evidencia_pruebas_calidad_seguridad/ruff.png)
+
 ## Buenas prácticas
 
 - **Métricas**: se nombran con el conjunto donde se calculan, `<split>_<métrica>` — `test_rmse`, `test_roc_auc`, `test_silhouette_score` (ver `mibici/modeling/train.py`).
@@ -167,6 +269,8 @@ reports/figures/mlflow_evidencia/
 ├── references         <- Diccionarios de datos, ML Canvas, documentos de diseño
 ├── reports
 │   └── figures        <- Gráficas para el reporte (evidencia MLflow, etc.)
+├── reports
+│   └── evidencia_pruebas_calidad_seguridad  <- Capturas de pytest, deepchecks y seguridad
 │
 ├── requirements.txt   <- Dependencias fijadas (reproducibilidad)
 │
