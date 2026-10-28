@@ -5,6 +5,7 @@ import pytest
 
 from mibici.modeling import tracking
 from mibici.modeling.regression import build_model, regression_metrics
+from mibici.modeling.train import KMeansClusterTrainer
 
 
 def test_fechas_de_config():
@@ -42,3 +43,27 @@ def test_metricas_prediccion_perfecta():
 def test_modelo_no_soportado():
     with pytest.raises(ValueError):
         build_model("xgboost")
+
+
+def test_seleccion_de_modelos_usa_validacion():
+    """La seleccion en el Registry no puede usar metricas de test (comentario del profe)."""
+    from mibici.modeling.register import _MODELOS
+
+    assert _MODELOS, "faltan preguntas en el registro"
+    for pregunta, (_, metrica, _) in _MODELOS.items():
+        assert metrica.startswith("val_"), (
+            f"{pregunta} se selecciona con {metrica!r}; debe ser una metrica de validacion"
+        )
+
+
+def test_p3_silhouette_se_calcula_en_ventanas_separadas():
+    """P3: perfiles por ventana y silhouette protegido si la ventana no alcanza."""
+    trainer_metrics = KMeansClusterTrainer._silhouette_o_nan
+
+    # ventana con una sola etiqueta: no hay silhouette posible -> NaN, no truena
+    X = np.array([[0.0, 1.0], [1.0, 0.0], [0.5, 0.5]])
+    assert np.isnan(trainer_metrics(X, np.zeros(3)))
+
+    # caso normal: 2 etiquetas -> silhouette computable
+    valor = trainer_metrics(X, np.array([0, 0, 1]))
+    assert -1.0 <= valor <= 1.0
