@@ -1,4 +1,4 @@
-"""Puntos de entrada del MLflow Project: ingest, features y train.
+"""Puntos de entrada del MLflow Project: ingest, features, train y search.
 
 Traduce los parámetros del `MLproject` a los CLIs del proyecto. No repite
 rutas ni fechas: esos defaults viven en `mibici/config.py`.
@@ -15,6 +15,12 @@ import typer
 app = typer.Typer(help="Entry points del MLflow Project — MiBici Equipo 01")
 
 EXPERIMENT_NAME = "mibici-equipo01"
+
+# pregunta -> comando de búsqueda con nested runs en train.py y opción de su malla
+_BUSQUEDAS = {
+    "p1": ("p1-search", "--n-estimators-list"),  # Random Forest: n_estimators
+    "p3": ("p3-search", "--n-clusters-list"),    # K-Means++: K
+}
 
 # pregunta -> (modelo baseline, modelos admitidos)
 _MODELOS = {
@@ -121,6 +127,37 @@ def train(
             "--n-init", str(n_init),
         ]
 
+    raise typer.Exit(code=_ejecutar(argv))
+
+
+@app.command()
+def search(
+    question: str = typer.Option("p1", "--question", help="Pregunta: p1 | p2 | p3."),
+    grid: str = typer.Option(
+        "auto", "--grid",
+        help="Valores separados por comas (p1: n_estimators, p3: K). 'auto' = malla de train.py.",
+    ),
+) -> None:
+    """Búsqueda de hiperparámetros con nested runs: un run padre y un run hijo por valor.
+
+    p1 -> n_estimators (default 50,100,200); p3 -> K (default 3,4,5,6).
+    p2 -> búsqueda de C de la regresión logística (0.1, 1, 10), la misma que
+    `train -P question=p2 -P model=logreg`; `grid` no aplica.
+    """
+    q = question.strip().lower()
+    if q == "p2":
+        argv = ["mibici.modeling.train", "p2", "--model-name", "logreg"]
+    elif q in _BUSQUEDAS:
+        comando, opcion = _BUSQUEDAS[q]
+        argv = ["mibici.modeling.train", comando]
+        malla = grid.strip()
+        # 'auto' o vacío (en Windows MLflow puede pasar '""') -> malla por defecto de train.py
+        if malla and malla.lower() != "auto" and malla != '""':
+            argv += [opcion, malla]
+    else:
+        raise typer.BadParameter(f"Pregunta inválida: {question!r}. Usa p1, p2 o p3.")
+
+    _reconciliar_experimento()
     raise typer.Exit(code=_ejecutar(argv))
 
 

@@ -13,10 +13,11 @@ from mibici.modeling.tracking import EXPERIMENT_NAME
 app = typer.Typer(help="Registra el mejor candidato de cada pregunta en el Model Registry.")
 
 # pregunta -> (nombre en el registry, metrica de seleccion, orden)
+# la seleccion se hace en VALIDACION: test queda solo para el reporte final
 _MODELOS = {
-    "p1": ("mibici-equipo01-p1-demanda", "test_mae", "ASC"),
-    "p2": ("mibici-equipo01-p2-riesgo", "test_roc_auc", "DESC"),
-    "p3": ("mibici-equipo01-p3-grupos", "test_silhouette_score", "DESC"),
+    "p1": ("mibici-equipo01-p1-demanda", "val_mae", "ASC"),
+    "p2": ("mibici-equipo01-p2-riesgo", "val_roc_auc", "DESC"),
+    "p3": ("mibici-equipo01-p3-grupos", "val_silhouette_score", "DESC"),
 }
 
 
@@ -87,6 +88,7 @@ def _registrar(pregunta: str) -> None:
     descripcion = _descripcion(run, metrica)
     cliente.update_registered_model(nombre, description=descripcion)
     cliente.update_model_version(nombre, version.version, description=descripcion)
+    cliente.set_registered_model_alias(nombre, "champion", str(version.version))
     logger.success(
         f"{nombre} v{version.version} <- {run.info.run_name} "
         f"({metrica}={run.data.metrics.get(metrica):.4f})"

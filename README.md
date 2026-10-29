@@ -33,6 +33,8 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 
 - Python 3.12
 - ~2 GB de espacio libre (CSVs + Parquet)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/): `mlflow run` lo usa para crear el entorno del `python_env.yaml` (Python 3.12.9 con versiones fijadas). Sin uv, MLflow necesita pyenv y falla con `'None' install 3.12.9`.
+- **Windows:** activar el *Modo de programador* (Configuración → Actualización y seguridad → Para programadores). `mlflow run` crea symlinks al instalar dependencias; sin ese permiso falla con `WinError 1314`.
 
 ## Instalación
 
@@ -46,12 +48,21 @@ pip install -r requirements.txt  # instala también el paquete mibici (-e .)
 
 ## Descarga de datos
 
+**Clon limpio (desde cero):** solo hace falta este comando. Descarga los 41 CSVs mensuales y la nomenclatura de estaciones (~1.2 GB) y los unifica en un Parquet:
+
 ```bash
-python -m mibici.dataset               # primera vez: descarga los 41 CSVs y unifica
-python -m mibici.dataset --skip-download  # CSVs ya presentes: solo re-unifica
-python -m mibici.dataset --force       # regenera aunque exista el Parquet
-python -m mibici.dataset --limit 2     # prueba rápida con 2 meses (escribe todo aparte)
+python -m mibici.dataset
 ```
+
+> Si vas a reproducir la entrega con `mlflow run` (ver [Reproducir con `mlflow run`](#reproducir-con-mlflow-run)), el entry point `ingest` ya ejecuta este mismo paso; no hace falta correrlo aparte.
+
+**Opcionales** (no se necesitan en un clon limpio):
+
+| Comando | Cuándo usarlo |
+|---------|---------------|
+| `python -m mibici.dataset --skip-download` | Ya tienes los CSVs en `data/raw/csv/` y solo quieres volver a unificarlos (p. ej. después de un cambio en la normalización). Falla si falta algún CSV. |
+| `python -m mibici.dataset --force` | El Parquet unificado ya existe y quieres regenerarlo sin que se detenga a preguntar `¿Continuar?`. Los CSVs que ya están descargados se reutilizan. |
+| `python -m mibici.dataset --limit 2` | Prueba rápida con solo 2 meses, para revisar que la ingesta funciona sin descargar todo. Escribe sus salidas aparte y no toca el Parquet ni el manifiesto completos. |
 
 Salidas:
 
@@ -68,6 +79,16 @@ Verificación de que tus datos son idénticos a los del equipo:
 ```bash
 pytest            # pruebas de ingesta, manifiesto y features
 ```
+
+Si `pytest` falla con `assert 15376153 == 15376127` en `test_unified_parquet_exists_and_is_non_empty`, no es un error del código: MiBici actualizó el CSV de 2023-05 después de que se generó el manifiesto versionado, así que tu descarga ya no coincide con él. Para validar tu entorno con los datos que descargaste:
+
+```bash
+python -m mibici.dataset --skip-download --force   # regenera el manifiesto local con tus datos (~1.5 min, sin volver a descargar)
+pytest                                             # ahora deben pasar las 29 pruebas
+git restore data/manifest.json                     # no commitees el manifiesto regenerado
+```
+
+En ese caso `pytest` confirma que la ingesta es consistente (Parquet, manifiesto y hashes cuadran) y que features y modelos funcionan, pero ya no que tus datos sean idénticos a los del equipo.
 
 ## Features (P1 y P2)
 
@@ -103,12 +124,83 @@ mlflow server --backend-store-uri sqlite:///mlflow.db --port 5000
 En otra terminal (o antes de lanzar cualquier corrida), apunta la variable de entorno al servidor para que todos los runs se registren ahí:
 
 ```bash
-export MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
+export MLFLOW_TRACKING_URI="http://127.0.0.1:5000"      # bash / macOS / Linux / Git Bash
+```
+```powershell
+$env:MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"     # PowerShell
+```
+En CMD, sin espacios ni comillas (CMD guarda en la variable todo lo que va después del `=`, incluido un espacio al final):
+
+```cmd
+set MLFLOW_TRACKING_URI=http://127.0.0.1:5000
+echo [%MLFLOW_TRACKING_URI%]
 ```
 
-Puedes persistirla en `.env` (no se versiona) para no repetirla en cada sesión. Todas las corridas de esta entrega se lanzan con `mlflow run`, no desde un notebook.
+El `echo` debe mostrar `[http://127.0.0.1:5000]`, con el `]` pegado al `5000`. Si aparece `[http://127.0.0.1:5000 ]`, la variable quedó con un espacio y `mlflow run` falla con `Invalid url: http://127.0.0.1:5000 /api/...`: vuelve a escribir el `set`.
+
+La variable solo vive en la terminal donde se definió: los `mlflow run` deben lanzarse desde esa misma terminal. Puedes persistirla en `.env` (no se versiona) para no repetirla en cada sesión. Todas las corridas de esta entrega se lanzan con `mlflow run`, no desde un notebook.
 
 > `mlflow.db` y `mlruns/` **no se versionan** (están en `.gitignore`, junto con `mlartifacts/`, los datos MiBici y los modelos serializados). En un clon nuevo el tracking arranca vacío, así que los runs se regeneran con los comandos de esta sección (las capturas de evidencia están en `reports/figures/mlflow_evidencia/`).
+
+### Reproducir con `mlflow run`
+
+Con el servidor arriba y `MLFLOW_TRACKING_URI` definida, desde la raíz del repo y en este orden. `--experiment-name` va siempre, para que los runs no caigan en `Default`; `--env-manager uv` crea el entorno aislado del `python_env.yaml` (la primera vez tarda ~1 min, después se reutiliza).
+
+```bash
+# 1. Datos y features
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e ingest              # macOS / Linux
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e ingest -P limit=0   # Windows
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e features
+
+# 2. Baselines
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p1 -P model=ridge
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=dummy
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=random
+
+# 3. Modelo elegido de cada pregunta
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p1 -P model=rf -P n_estimators=300
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=logreg
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=k-means++ -P n_init=10
+
+# 4. Model Registry
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e register
+```
+
+Valores de `model` por pregunta (vacío = baseline): p1 `ridge` | `rf` · p2 `dummy` | `logreg` · p3 `random` | `k-means++`. Los parámetros completos de cada entry point están en el `MLproject`; los defaults (rutas, fechas, semilla) viven en `mibici/config.py`.
+
+Notas:
+
+- **`-P limit=0` en la ingesta (solo Windows)** significa "sin límite". En Windows, el default vacío llega como `""` y la ingesta falla con `Invalid value for '--limit'`; en macOS/Linux no hace falta.
+- **Re-ejecutar la ingesta** cuando el Parquet ya existe: agrega `-P force=true`, o se detiene a preguntar `¿Continuar?`. Para no volver a descargar los CSV: `-P skip_download=true`.
+- **`features` es obligatorio** antes de entrenar P1 y P2. Sus runs (y los de `ingest`) no registran métricas ni parámetros: solo dejan trazabilidad de commit y entry point.
+- **Tiempos de referencia** (Windows, conexión doméstica): ingesta completa ~7.5 min (descarga ~6 min), features ~1 min, P2 `logreg` ~4.5 min, P3 <1 min.
+- **Datos de la fuente:** MiBici puede actualizar CSV ya publicados. Al 22 oct 2026, el de 2023-05 trae 26 viajes más que el registrado en `data/manifest.json` (15,376,153 vs 15,376,127 en total), así que una descarga nueva produce otros hashes y `pytest` marca esa diferencia (ver [Descarga de datos](#descarga-de-datos) para validar con tus datos). El manifiesto versionado es la referencia del equipo: **no lo commitees al re-ejecutar la ingesta** (`git restore data/manifest.json`).
+
+La salida completa de estos comandos en un clon limpio (comando, respuesta del log y resultado de cada paso) está en [`reports/validacion_clon_limpio_issue62.md`](reports/validacion_clon_limpio_issue62.md).
+
+### Model Registry
+
+`mlflow run . -e register` (`mibici/modeling/register.py`) registra el mejor run de cada pregunta según su métrica de **validación** (la selección no mira test; esa ventana queda solo para el reporte final):
+
+| Pregunta | Modelo registrado | Métrica de selección |
+|---|---|---|
+| P1 | `mibici-equipo01-p1-demanda` | `val_mae` (menor es mejor) |
+| P2 | `mibici-equipo01-p2-riesgo` | `val_roc_auc` (mayor es mejor) |
+| P3 | `mibici-equipo01-p3-grupos` | `val_silhouette_score` (mayor es mejor) |
+
+- Busca primero entre las corridas con tag `stage_of_work=candidate`; si ninguna tiene modelo logueado, usa todas las corridas de la pregunta.
+- Cada versión lleva en su descripción el linaje: run de origen, commit y hashes del manifiesto y del Parquet.
+- No registra dos veces el mismo run: re-ejecutarlo es seguro.
+- **Ciclo de vida:** la versión en producción se marca con el alias `@champion` y se carga por nombre:
+
+  ```python
+  import mlflow
+  modelo = mlflow.pyfunc.load_model("models:/mibici-equipo01-p2-riesgo@champion")
+  ```
+
+### Ejecución directa (sin MLflow Project)
+
+Útil para desarrollo. Para reproducir la entrega usa los comandos `mlflow run` de arriba. Las búsquedas con nested runs de P1 y P3 hoy solo se lanzan así: `python -m mibici.modeling.train p1-search` y `python -m mibici.modeling.train p3-search`.
 
 - Experimento: `mibici-equipo01`
 - Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
@@ -156,7 +248,6 @@ pytest -v
 
 Salida ejemplo
   ```bash
-=================================== test session starts ===================================
 platform win32 -- Python 3.12.2, pytest-9.1.1, pluggy-1.7.0 -- D:\MNA\TC5061-Proyecto-Equipo01\.venv\Scripts\python.exe
 cachedir: .pytest_cache
 rootdir: D:\MNA\TC5061-Proyecto-Equipo01
@@ -194,7 +285,6 @@ tests/test_modeling.py::test_tags PASSED                                        
 tests/test_modeling.py::test_metricas_prediccion_perfecta PASSED                         [ 96%]
 tests/test_modeling.py::test_modelo_no_soportado PASSED                                  [100%]
 
-=================================== 29 passed in 57.33s ===================================
   ```
 
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\pytest`
@@ -207,7 +297,6 @@ pytest tests/test_modeling.py -v
 
 Salida ejemplo
   ```bash
-=================================== test session starts ===================================
 platform win32 -- Python 3.12.2, pytest-9.1.1, pluggy-1.7.0 -- D:\MNA\TC5061-Proyecto-Equipo01\.venv\Scripts\python.exe
 cachedir: .pytest_cache
 rootdir: D:\MNA\TC5061-Proyecto-Equipo01
@@ -221,7 +310,6 @@ tests/test_modeling.py::test_tags PASSED                                        
 tests/test_modeling.py::test_metricas_prediccion_perfecta PASSED                         [ 80%]
 tests/test_modeling.py::test_modelo_no_soportado PASSED                                  [100%]
 
-=================================== 5 passed in 10.22s ====================================
   ```
 
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\DeepChecks.png`
@@ -239,6 +327,19 @@ All checks passed!
 
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\ruff.png`
 ![Security Success](reports/figures/evidencia_pruebas_calidad_seguridad/ruff.png)
+### Comparación de Familias de Modelos
+
+Explorarando múltiples algoritmos, el pipeline de entrenamiento ahora compara distintas familias de modelos utilizando *nested runs* en MLflow para cada pregunta de investigación:
+
+- **P1 (Regresión):** Se compara el baseline (`Ridge`) contra `RandomForestRegressor` y la nueva familia `GradientBoostingRegressor`.
+- **P2 (Clasificación):** Se compara el baseline (`Dummy`) contra `LogisticRegression` y la nueva familia `RandomForestClassifier`.
+- **P3 (Clustering):** Se compara el baseline (`KMeans` con inicialización aleatoria) contra `KMeans++` y la nueva familia `GaussianMixture`.
+
+Para ejecutar las búsquedas de hiperparámetros y registrar los candidatos de estas nuevas familias en tu servidor local de MLflow, ejecuta:
+```bash
+python -m mibici.modeling.train p1-search
+python -m mibici.modeling.train p2 --model-name rf
+python -m mibici.modeling.train p3-search
 
 ## Buenas prácticas
 
@@ -248,6 +349,28 @@ Captura de pantalla para verificar que se ejecute correctamente `reports\figures
 - **Config centralizada**: rutas, cortes de fechas y `SEED` se leen de `mibici/config.py`, sin duplicarlos en `mibici/dataset.py` ni en `mibici/modeling/`.
 - **`.gitignore`**: excluye los datos MiBici (`/data/*`, salvo `data/manifest.json`), `mlruns/`, `mlartifacts/`, `.env` y los modelos serializados (`models/*.pkl`, `models/*.joblib`, `models/*.onnx`, `models/*.bin`).
 - **Versionado de datos**: `data/manifest.json` guarda el SHA-256 del parquet unificado y de la nomenclatura, con el total de viajes y estaciones. Es lo único de `data/` que entra al repo.
+
+## Seguridad y Calidad del Código
+
+Para garantizar que el repositorio no exponga credenciales ni dependencias vulnerables, integramos herramientas de análisis estático y auditoría de seguridad:
+
+- **Chequeo de credenciales (Issue #102):** El archivo `.gitignore` excluye explícitamente `.env`, bases de datos locales (`mlflow.db`) y datos crudos (`data/raw/`). Se verificó en el historial mediante `git ls-files` que no existen secretos expuestos. Asimismo, una búsqueda con `git grep` descartó credenciales hardcodeadas.
+- **Análisis estático (Bandit v1.8.0):** Se ejecuta sobre el directorio `mibici/`. Se detectaron 5 alertas de severidad baja (Low) asociadas al uso de `subprocess` en `tracking.py` y `mlflow_entry.py`. **Justificación (Issue #101):** Estas alertas se asumen como seguras ya que los subprocesos solo ejecutan comandos internos de infraestructura (`git rev-parse HEAD` y llamadas nativas a Python), sin procesar *input* externo no confiable.
+- **Auditoría de dependencias (pip-audit v2.7.3):** El escaneo inicial detectó la vulnerabilidad *CVE-2026-53995* en la librería `mlflow` (v3.17.0). **Resolución:** Se mitigó el riesgo actualizando la dependencia a `mlflow==3.17.2` en el archivo `requirements.txt`, resultando en una auditoría limpia.
+
+Para ejecutar automatizadamente los chequeos de seguridad (Issue #101), utiliza el siguiente comando de `make`:
+```bash
+make security
+
+## Ejecución de Pruebas y Chequeos de Seguridad
+
+Para garantizar la calidad y seguridad del código, este repositorio integra pruebas unitarias, validación de datos y análisis estático. Todo el flujo está orquestado mediante `Make`.
+
+### Instrucciones de ejecución
+Desde la raíz del repositorio, ejecuta el siguiente comando unificado:
+```bash
+make check-all
+
 
 ## Estructura del proyecto
 
