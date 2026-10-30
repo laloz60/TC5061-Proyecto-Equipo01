@@ -340,6 +340,7 @@ Para ejecutar las búsquedas de hiperparámetros y registrar los candidatos de e
 python -m mibici.modeling.train p1-search
 python -m mibici.modeling.train p2 --model-name rf
 python -m mibici.modeling.train p3-search
+```
 
 ## Buenas prácticas
 
@@ -361,6 +362,7 @@ Para garantizar que el repositorio no exponga credenciales ni dependencias vulne
 Para ejecutar automatizadamente los chequeos de seguridad (Issue #101), utiliza el siguiente comando de `make`:
 ```bash
 make security
+```
 
 ## Ejecución de Pruebas y Chequeos de Seguridad
 
@@ -370,11 +372,15 @@ Para garantizar la calidad y seguridad del código, este repositorio integra pru
 Desde la raíz del repositorio, ejecuta el siguiente comando unificado:
 ```bash
 make check-all
+```
+
+- **Limpieza y privacidad:** consulta la [preparación y protección de datos](docs/clean_doc).
 
 
 ## Estructura del proyecto
 
 ```
+<<<<<<< HEAD
 ├── LICENSE            <- Licencia open-source (MIT)
 ├── Makefile           <- Comandos de conveniencia (make data, make test, ...)
 ├── README.md          <- Este archivo
@@ -408,6 +414,41 @@ make check-all
 │   └── plots.py           <- Visualizaciones
 │
 └── tests              <- Pruebas (pytest)
+=======
+├── LICENSE            <- Licencia open-source (MIT)     
+├── Makefile           <- Comandos de conveniencia (make data, make test, ...)     
+├── README.md          <- Este archivo     
+├── data     
+│   ├── external       <- Datos de terceros     
+│   ├── interim        <- Datos intermedios transformados     
+│   ├── processed      <- datasets finales para modelado     
+│   ├── raw            <- Parquet unificado + CSVs descargados (NO versionados)     
+│   └── manifest.json  <- Versionado: totales + SHA-256 de cada archivo de datos     
+│     
+├── docs               <- Proyecto mkdocs     
+│   └── clean_doc.md   <- Documentación limpieza de datos
+├── models             <- Modelos entrenados y serializados     
+├── notebooks          <- Notebooks Jupyter (iniciales: <iniciales>-<descripción>)     
+├── pyproject.toml     <- Metadatos del paquete mibici + config de ruff     
+├── references         <- Diccionarios de datos, ML Canvas, documentos de diseño     
+├── reports     
+│   └── figures        <- Gráficas para el reporte (evidencia MLflow, etc.)     
+│     
+├── requirements.txt   <- Dependencias fijadas (reproducibilidad)     
+│     
+├── mibici             <- Código fuente     
+│   ├── config.py          <- Rutas, semilla, corte de datos y partición temporal     
+│   ├── dataset.py         <- Ingesta: descarga → normalización → Parquet + manifiesto     
+│   ├── features.py        <- Feature engineering sin fuga temporal     
+│   ├── modeling     
+│   │   ├── train.py       <- Entrenamiento P1/P2/P3     
+│   │   └── predict.py     <- Inferencia     
+│   ├── reportes_p3.py     <- Regenera summary y figuras de P3 sin binarios     
+│   └── plots.py           <- Visualizaciones     
+│     
+└── tests              <- Pruebas (pytest)     
+
+>>>>>>> main
 ```
 
 ## Flujo de trabajo Git
