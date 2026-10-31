@@ -73,7 +73,10 @@ def test_semilla_distinta_cambia_el_entrenamiento(muestra_train, monkeypatch):
     monkeypatch.setattr(regression, "SEED", SEED + 1)
     predicho_otra, _ = _entrenar(muestra_train)
 
-    assert not np.array_equal(predicho_con_42, predicho_otra), (
+    # allclose y no array_equal: con n_jobs=-1 hasta la MISMA semilla difiere
+    # en el ultimo bit (1e-15), asi que array_equal daria False aunque la
+    # semilla no tuviera efecto (revisado por @smuciton en el PR #114)
+    assert not np.allclose(predicho_con_42, predicho_otra, rtol=0, atol=1e-9), (
         "cambiar la semilla no alteró las predicciones: la prueba de "
         "reproducibilidad no estaría midiendo nada"
     )
