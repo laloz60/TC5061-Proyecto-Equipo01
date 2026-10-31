@@ -24,7 +24,7 @@ _BUSQUEDAS = {
 
 # pregunta -> (modelo baseline, modelos admitidos)
 _MODELOS = {
-    "p1": ("ridge", ("ridge", "rf")),
+    "p1": ("regla", ("regla", "ridge", "rf")),
     "p2": ("dummy", ("dummy", "logreg")),
     "p3": ("random", ("random", "k-means++")),
 }

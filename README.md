@@ -153,7 +153,7 @@ mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e ingest -P lim
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e features
 
 # 2. Baselines
-mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p1 -P model=ridge
+mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p1 -P model=regla
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p2 -P model=dummy
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P question=p3 -P model=random
 
@@ -166,7 +166,7 @@ mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e train -P ques
 mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e register
 ```
 
-Valores de `model` por pregunta (vacío = baseline): p1 `ridge` | `rf` · p2 `dummy` | `logreg` · p3 `random` | `k-means++`. Los parámetros completos de cada entry point están en el `MLproject`; los defaults (rutas, fechas, semilla) viven en `mibici/config.py`.
+Valores de `model` por pregunta (vacío = baseline): p1 `regla` | `ridge` | `rf` · p2 `dummy` | `logreg` · p3 `random` | `k-means++`. Los parámetros completos de cada entry point están en el `MLproject`; los defaults (rutas, fechas, semilla) viven en `mibici/config.py`.
 
 Notas:
 
@@ -203,10 +203,11 @@ La salida completa de estos comandos en un clon limpio (comando, respuesta del l
 Útil para desarrollo. Para reproducir la entrega usa los comandos `mlflow run` de arriba. Las búsquedas con nested runs de P1 y P3 hoy solo se lanzan así: `python -m mibici.modeling.train p1-search` y `python -m mibici.modeling.train p3-search`.
 
 - Experimento: `mibici-equipo01`
-- Convención de runs: nombre `P1-baseline-ridge`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
+- Convención de runs: nombre `P1-baseline`, `P2-baseline-logreg`, `P3-kmeans`; tags `equipo=01`, `pregunta=P1|P2|P3`, `commit=<sha>`; params incluyen rango de fechas y hash del manifiesto; al menos 1 artefacto por run.
 - Entrenamiento: `python -m mibici.modeling.train`. Antes de P1 y P2 correr `python -m mibici.features` para generar las features.
-- **P1 (Regresión)** — baseline `ridge` y candidato `rf`:
+- **P1 (Regresión)** — baseline `regla` (no entrena) y candidatos `ridge` y `rf`:
   ```bash
+  python -m mibici.modeling.train p1 --model regla
   python -m mibici.modeling.train p1 --model ridge
   python -m mibici.modeling.train p1 --model rf
   ```
@@ -331,7 +332,7 @@ Captura de pantalla para verificar que se ejecute correctamente `reports\figures
 
 Explorarando múltiples algoritmos, el pipeline de entrenamiento ahora compara distintas familias de modelos utilizando *nested runs* en MLflow para cada pregunta de investigación:
 
-- **P1 (Regresión):** Se compara el baseline (`Ridge`) contra `RandomForestRegressor` y la nueva familia `GradientBoostingRegressor`.
+- **P1 (Regresión):** Se compara el baseline (regla del promedio de la misma hora en las 4 semanas previas) contra `Ridge`, `RandomForestRegressor` y la nueva familia `GradientBoostingRegressor`.
 - **P2 (Clasificación):** Se compara el baseline (`Dummy`) contra `LogisticRegression` y la nueva familia `RandomForestClassifier`.
 - **P3 (Clustering):** Se compara el baseline (`KMeans` con inicialización aleatoria) contra `KMeans++` y la nueva familia `GaussianMixture`.
 
