@@ -1,0 +1,162 @@
+{
+  "filas": 15376153,
+  "semilla": 42,
+  "filas_por_muestra": 200000,
+  "tipos": {
+    "diferencias": {},
+    "columnas_extra": [],
+    "ok": true
+  },
+  "faltantes": {
+    "viaje_id": {
+      "nulos": 0,
+      "porcentaje": 0.0
+    },
+    "usuario_id": {
+      "nulos": 0,
+      "porcentaje": 0.0
+    },
+    "genero": {
+      "nulos": 104550,
+      "porcentaje": 0.679949
+    },
+    "anio_nacimiento": {
+      "nulos": 7592,
+      "porcentaje": 0.049375
+    },
+    "inicio_viaje": {
+      "nulos": 0,
+      "porcentaje": 0.0
+    },
+    "fin_viaje": {
+      "nulos": 0,
+      "porcentaje": 0.0
+    },
+    "origen_id": {
+      "nulos": 0,
+      "porcentaje": 0.0
+    },
+    "destino_id": {
+      "nulos": 0,
+      "porcentaje": 0.0
+    }
+  },
+  "duplicados": {
+    "filas_exactas": 758,
+    "viaje_id": 758,
+    "mismo_viaje_con_otro_id": 1065
+  },
+  "deepchecks_muestra": {
+    "filas": 200000,
+    "columnas_con_tipos_mezclados": [],
+    "nulos_por_columna": {
+      "genero": {
+        "None": 1360
+      },
+      "anio_nacimiento": {
+        "math.nan": 101
+      }
+    },
+    "porcentaje_filas_duplicadas": 0.0
+  },
+  "drift_viajes": {
+    "umbral": 0.2,
+    "columnas": {
+      "genero": {
+        "puntaje": 0.0,
+        "metodo": "Cramer's V"
+      },
+      "origen_id": {
+        "puntaje": 0.0105,
+        "metodo": "Cramer's V"
+      },
+      "destino_id": {
+        "puntaje": 0.0419,
+        "metodo": "Cramer's V"
+      },
+      "hora_inicio": {
+        "puntaje": 0.0214,
+        "metodo": "Cramer's V"
+      },
+      "dia_semana": {
+        "puntaje": 0.0155,
+        "metodo": "Cramer's V"
+      },
+      "anio_nacimiento": {
+        "puntaje": 0.0785,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "duracion_min": {
+        "puntaje": 0.0097,
+        "metodo": "Kolmogorov-Smirnov"
+      }
+    },
+    "marcadas": []
+  },
+  "drift_features": {
+    "umbral": 0.2,
+    "columnas": {
+      "hora_del_dia": {
+        "puntaje": 0.0,
+        "metodo": "Cramer's V"
+      },
+      "dia_semana": {
+        "puntaje": 0.004,
+        "metodo": "Cramer's V"
+      },
+      "es_fin_de_semana": {
+        "puntaje": 0.0,
+        "metodo": "Cramer's V"
+      },
+      "mes": {
+        "puntaje": 0.181,
+        "metodo": "Cramer's V"
+      },
+      "salidas": {
+        "puntaje": 0.0362,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "llegadas": {
+        "puntaje": 0.0352,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "salidas_lag_1h": {
+        "puntaje": 0.0358,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "salidas_lag_24h": {
+        "puntaje": 0.0346,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "salidas_lag_168h": {
+        "puntaje": 0.037,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "salidas_media_7d": {
+        "puntaje": 0.0832,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "salidas_prom_4sem": {
+        "puntaje": 0.0427,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "neto_lag_1h": {
+        "puntaje": 0.0182,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "neto_lag_24h": {
+        "puntaje": 0.0193,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "neto_media_7d": {
+        "puntaje": 0.0865,
+        "metodo": "Kolmogorov-Smirnov"
+      },
+      "capacidad": {
+        "puntaje": 0.0332,
+        "metodo": "Kolmogorov-Smirnov"
+      }
+    },
+    "marcadas": []
+  }
+}

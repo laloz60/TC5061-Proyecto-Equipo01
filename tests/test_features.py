@@ -8,6 +8,7 @@ from mibici.features import (
     add_station_features,
     aggregate_station_hour,
     assign_split,
+    quitar_viajes_duplicados,
 )
 
 INICIO = pd.Timestamp("2024-01-01 00:00")
@@ -28,6 +29,14 @@ def crear_horas(salidas, estacion=1):
     df["salidas"] = salidas
     df["llegadas"] = 0
     return df
+
+
+def test_quitar_viajes_duplicados_conserva_una_fila_por_id():
+    trips = pd.DataFrame({"viaje_id": [1, 1, 2], "origen_id": [10, 10, 20]})
+
+    resultado = quitar_viajes_duplicados(trips)
+
+    assert resultado["viaje_id"].tolist() == [1, 2]
 
 
 def test_horas_sin_viajes_quedan_en_cero():
