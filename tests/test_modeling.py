@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from mibici.modeling import tracking
@@ -67,3 +68,59 @@ def test_p3_silhouette_se_calcula_en_ventanas_separadas():
     # caso normal: 2 etiquetas -> silhouette computable
     valor = trainer_metrics(X, np.array([0, 0, 1]))
     assert -1.0 <= valor <= 1.0
+
+
+def test_p3_silhouette_con_una_sola_fila_es_nan():
+    X = np.array([[0.0, 1.0]])
+    assert np.isnan(KMeansClusterTrainer._silhouette_o_nan(X, np.array([0])))
+
+
+def test_perfil_ventana_vacio_da_ceros():
+    """Una ventana sin viajes (p. ej. una estacion nueva) no debe tronar."""
+    df_vacio = pd.DataFrame(columns=["origen_id", "hora"])
+    X = KMeansClusterTrainer._perfil_ventana(df_vacio, None, 5)
+
+    assert X.shape == (5, 24)
+    assert (X == 0).all()
+
+
+def test_perfil_ventana_normaliza_y_alinea_con_nomenclatura():
+    # la estacion 1 viaja a las 8 (2 veces) y a las 9 (1); la 2 solo a las 8
+    df = pd.DataFrame({"origen_id": [1, 1, 1, 2], "hora": [8, 8, 9, 8]})
+    estaciones = pd.Series([1, 2, 3])  # la 3 esta en la nomenclatura sin viajes
+
+    X = KMeansClusterTrainer._perfil_ventana(df, estaciones, 3)
+
+    assert X.shape == (3, 24)
+    np.testing.assert_allclose(X[0, 8], 2 / 3)  # proporcion de viajes, no conteos
+    np.testing.assert_allclose(X[0, 9], 1 / 3)
+    np.testing.assert_allclose(X[1, 8], 1.0)
+    assert (X[2] == 0).all()  # estacion sin viajes: fila de ceros, no NaN
+    # cada fila normalizada suma 1 (o 0 si no hay viajes)
+    np.testing.assert_allclose(X.sum(axis=1), [1.0, 1.0, 0.0])
+
+
+def test_perfil_ventana_sin_nomenclatura_solo_incluye_las_que_aparecen():
+    df = pd.DataFrame({"origen_id": [7, 7, 9], "hora": [8, 8, 10]})
+    X = KMeansClusterTrainer._perfil_ventana(df, None, 2)
+
+    assert X.shape == (2, 24)  # solo las estaciones presentes, en su orden
+    np.testing.assert_allclose(X[0, 8], 1.0)  # la 7: 2 de 2 viajes a las 8
+    np.testing.assert_allclose(X[1, 10], 1.0)  # la 9: 1 de 1 viaje a las 10
+
+
+def test_train_p3_misma_semilla_mismos_clusters(tmp_path, monkeypatch):
+    """KMeans con SEED fija debe dar el mismo agrupamiento en dos corridas."""
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", f"sqlite:///{tmp_path}/mlflow_test.db")
+    trainer = KMeansClusterTrainer(n_clusters=3)
+
+    rng = np.random.default_rng(0)
+    perfiles = np.vstack(
+        [rng.normal(0, 0.05, (20, 24)), rng.normal(1, 0.05, (20, 24))]
+    )
+
+    _, etiquetas_1 = trainer.train_model(perfiles)
+    _, etiquetas_2 = trainer.train_model(perfiles)
+
+    np.testing.assert_array_equal(etiquetas_1, etiquetas_2)
+    assert len(np.unique(etiquetas_1)) == 3
