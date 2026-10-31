@@ -130,7 +130,61 @@ def plot_predictions(y_real, y_pred, titulo, path):
     plt.close(fig)
 
 
-def train_p1(features_path: Path, kind="ridge", rf_max_samples=500_000, n_estimators=100):
+def rule_metrics(val, test):
+    """Metricas de la regla baseline: promedio de la misma hora en las 4 semanas previas."""
+    metricas = {}
+    for nombre, datos in [("val", val), ("test", test)]:
+        y_real = datos[TARGET].to_numpy()
+        y_regla = datos[BASELINE].to_numpy()
+        for metrica, valor in regression_metrics(y_real, y_regla).items():
+            metricas[f"{nombre}_{metrica}"] = valor
+    return metricas
+
+
+def train_p1_rule(features_path: Path):
+    """Baseline de P1: aplica la regla sin entrenar, por eso no loguea modelo."""
+    train, val, test = load_p1_data(features_path)
+    logger.info(f"train={len(train):,} val={len(val):,} test={len(test):,}")
+
+    metricas = rule_metrics(val, test)
+    run_name = "P1-baseline"
+
+    params = {
+        "model_type": "regla_prom_4sem",
+        "target": "salidas por estacion y hora (t+1)",
+        "baseline": "promedio misma hora 4 semanas previas",
+        "features": BASELINE,
+        "n_train": len(train),
+        "n_val": len(val),
+        "n_test": len(test),
+        "random_state": SEED,
+    }
+    params.update(split_params())
+    params.update(data_params())
+
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    with mlflow.start_run(run_name=run_name):
+        mlflow.set_tags(run_tags("P1"))
+        mlflow.set_tags({"stage_of_work": "baseline", "model_family": "regla"})
+        mlflow.log_params(params)
+        mlflow.log_metrics(metricas)
+
+        fig_path = FIGURES_DIR / "p1_regla_pred_vs_real.png"
+        y_regla = test[BASELINE].to_numpy()
+        plot_predictions(test[TARGET].to_numpy(), y_regla, run_name, fig_path)
+        mlflow.log_artifact(str(fig_path), artifact_path="figures")
+
+    logger.success(
+        f"{run_name}: test MAE={metricas['test_mae']:.3f}, "
+        f"RMSE={metricas['test_rmse']:.3f}, R2={metricas['test_r2']:.3f}"
+    )
+    return metricas
+
+
+def train_p1(features_path: Path, kind="regla", rf_max_samples=500_000, n_estimators=100):
+    if kind == "regla":
+        return train_p1_rule(features_path)
+
     train, val, test = load_p1_data(features_path)
     logger.info(f"train={len(train):,} val={len(val):,} test={len(test):,}")
 
@@ -154,9 +208,11 @@ def train_p1(features_path: Path, kind="ridge", rf_max_samples=500_000, n_estima
             metricas[f"baseline_{nombre}_{metrica}"] = valor
 
     if kind == "ridge":
-        run_name = "P1-baseline-ridge"
+        run_name = "P1-candidato-ridge"
+        familia = "ridge"
     else:
         run_name = "P1-candidato-rf"
+        familia = "random_forest"
 
     params = {
         "model_type": type(model[-1]).__name__,
@@ -181,6 +237,7 @@ def train_p1(features_path: Path, kind="ridge", rf_max_samples=500_000, n_estima
     mlflow.set_experiment(EXPERIMENT_NAME)
     with mlflow.start_run(run_name=run_name):
         mlflow.set_tags(run_tags("P1"))
+        mlflow.set_tags({"stage_of_work": "candidate", "model_family": familia})
         mlflow.log_params(params)
         mlflow.log_metrics(metricas)
 

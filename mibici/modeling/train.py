@@ -479,7 +479,7 @@ def train_p3_search(
 
 @app.command("p1")
 def train_p1(
-    model: str = typer.Option("ridge", help="Baseline: 'ridge' | Candidato: 'rf'"),
+    model: str = typer.Option("regla", help="Baseline: 'regla' | Candidatos: 'ridge', 'rf'"),
     features_path: Path = typer.Option(
         None, help="Features estación x hora (parquet de features.py)."
     ),

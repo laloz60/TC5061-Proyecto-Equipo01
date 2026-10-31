@@ -1,10 +1,11 @@
 import json
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from mibici.modeling import tracking
-from mibici.modeling.regression import build_model, regression_metrics
+from mibici.modeling.regression import build_model, regression_metrics, rule_metrics
 from mibici.modeling.train import KMeansClusterTrainer
 
 
@@ -43,6 +44,17 @@ def test_metricas_prediccion_perfecta():
 def test_modelo_no_soportado():
     with pytest.raises(ValueError):
         build_model("xgboost")
+
+
+def test_regla_baseline_usa_promedio_de_4_semanas():
+    val = pd.DataFrame({"salidas": [1.0, 3.0], "salidas_prom_4sem": [1.0, 3.0]})
+    test = pd.DataFrame({"salidas": [2.0, 4.0], "salidas_prom_4sem": [3.0, 5.0]})
+
+    metricas = rule_metrics(val, test)
+
+    assert metricas["val_mae"] == 0
+    assert metricas["test_mae"] == 1
+    assert set(metricas) == {"val_mae", "val_rmse", "val_r2", "test_mae", "test_rmse", "test_r2"}
 
 
 def test_seleccion_de_modelos_usa_validacion():
