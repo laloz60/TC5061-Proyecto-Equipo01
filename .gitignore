@@ -167,6 +167,8 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv-validacion/
+reports/data_validation/*.html
 env/
 venv/
 ENV/

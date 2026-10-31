@@ -21,6 +21,13 @@ app = typer.Typer()
 FEATURES_PATH = PROCESSED_DATA_DIR / "features_estacion_hora.parquet"
 
 
+def quitar_viajes_duplicados(trips):
+    """Quita los viajes con `viaje_id` repetido (758 filas exactas en 2026-09)."""
+    sin_duplicados = trips.drop_duplicates(subset="viaje_id")
+    logger.info(f"Viajes duplicados eliminados: {len(trips) - len(sin_duplicados):,}")
+    return sin_duplicados
+
+
 def aggregate_station_hour(trips, start=None, end=None):
     """Cuenta salidas y llegadas por estacion y hora (target de P1 y saldo para P2)."""
     if start is None:
@@ -165,8 +172,9 @@ def main(
     nomenclatura_path: Path = NOMENCLATURA_PARQUET_PATH,
     output_path: Path = FEATURES_PATH,
 ):
-    columnas = ["inicio_viaje", "fin_viaje", "origen_id", "destino_id"]
+    columnas = ["viaje_id", "inicio_viaje", "fin_viaje", "origen_id", "destino_id"]
     trips = pd.read_parquet(trips_path, columns=columnas)
+    trips = quitar_viajes_duplicados(trips)
     nomenclatura = pd.read_parquet(nomenclatura_path)
 
     df = build_features(trips, nomenclatura)

@@ -231,7 +231,7 @@ reports/figures/mlflow_evidencia/
 ```
 
 ## Pruebas de calidad y seguridad
-El proyecto incluye un conjunto de pruebas con `pytest`, suites de validación de datos/modelado `DeepChecks`.
+El proyecto incluye pruebas con `pytest` y validación de datos con `DeepChecks`.
 
 **Estructura de `test/`**
 - `test/test_data.py`: Pruebas para la datos de MiBici, validación de SHA-256 e integridad del parquet unificado, comportamiento del CLI.
@@ -290,7 +290,7 @@ tests/test_modeling.py::test_modelo_no_soportado PASSED                         
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\pytest`
 ![Pytest Success](reports/figures/evidencia_pruebas_calidad_seguridad/pytest.png)
   
-2. Pruebas de Modelado e Integridad `DeepChecks`
+2. Pruebas de modelado
   ```bash
 pytest tests/test_modeling.py -v
   ```
@@ -312,10 +312,29 @@ tests/test_modeling.py::test_modelo_no_soportado PASSED                         
 
   ```
 
-Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\DeepChecks.png`
-![DeepChecks Success](reports/figures/evidencia_pruebas_calidad_seguridad/DeepChecks.png)
+Captura de pantalla de las pruebas de modelado, `reports\figures\evidencia_pruebas_calidad_seguridad\DeepChecks.png`
+![Pruebas de modelado](reports/figures/evidencia_pruebas_calidad_seguridad/DeepChecks.png)
 
-3. Análisis de calidad
+3. Validación de datos con `DeepChecks`
+
+Revisa tipos, valores faltantes, duplicados y drift entre train y test. Corre en un entorno aparte porque DeepChecks 0.19.1 no funciona con las versiones de scikit-learn y NumPy del proyecto.
+
+  ```bash
+make validation_env   # solo la primera vez
+make validate
+  ```
+
+Sin `make`, en Windows:
+
+  ```bash
+uv venv --python 3.12 .venv-validacion
+uv pip install --python .venv-validacion\Scripts\python.exe -r requirements-validation.txt
+.venv-validacion\Scripts\python.exe -W ignore -m mibici.data_validation
+  ```
+
+La salida queda en `reports/data_validation/resumen.json`. Los hallazgos y las acciones tomadas están en [`reports/validacion_datos.md`](reports/validacion_datos.md).
+
+4. Análisis de calidad
   ```bash
 ruff check .
   ```
@@ -367,7 +386,7 @@ make security
 Para garantizar la calidad y seguridad del código, este repositorio integra pruebas unitarias, validación de datos y análisis estático. Todo el flujo está orquestado mediante `Make`.
 
 ### Instrucciones de ejecución
-Desde la raíz del repositorio, ejecuta el siguiente comando unificado:
+Desde la raíz del repositorio, crea una vez el entorno de validación con `make validation_env` y ejecuta el siguiente comando unificado:
 ```bash
 make check-all
 

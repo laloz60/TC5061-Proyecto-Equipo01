@@ -21,5 +21,4 @@ typer==0.27.3
 uv==0.13.5
 bandit==1.9.4
 pip-audit==2.10.1
-deepchecks==0.19.1
 -e .

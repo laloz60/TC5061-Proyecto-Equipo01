@@ -5,6 +5,11 @@
 PROJECT_NAME = TC5061-Proyecto-Equipo01
 PYTHON_VERSION = 3.12
 PYTHON_INTERPRETER = python
+ifeq ($(OS),Windows_NT)
+VALIDATION_PYTHON = .venv-validacion/Scripts/python
+else
+VALIDATION_PYTHON = .venv-validacion/bin/python
+endif
 
 #################################################################################
 # COMMANDS                                                                      #
@@ -58,9 +63,22 @@ security:
 	pip-audit -r requirements.txt >> reports/security/pip_audit_report.txt || true
 	@echo "Reportes guardados en reports/security/"
 
+## Create the separate environment for DeepChecks
+.PHONY: validation_env
+validation_env:
+	uv venv --python $(PYTHON_VERSION) .venv-validacion
+	uv pip install --python $(VALIDATION_PYTHON) -r requirements-validation.txt
+
+
+## Validate data with DeepChecks (types, nulls, duplicates and drift)
+.PHONY: validate
+validate:
+	$(VALIDATION_PYTHON) -W ignore -m mibici.data_validation
+
+
 ## Run all unit tests, data validation and security checks
 .PHONY: check-all
-check-all: test security
+check-all: test validate security
 
 ## Set up Python interpreter environment
 .PHONY: create_environment

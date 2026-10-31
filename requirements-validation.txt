@@ -1,0 +1,14 @@
+# Entorno aparte para validar datos con DeepChecks (make validate).
+# deepchecks 0.19.1 no funciona con scikit-learn 1.9 ni con NumPy 2, que son las
+# versiones con las que se entrenan los modelos (requirements.txt).
+deepchecks==0.19.1
+scikit-learn==1.5.2
+pandas==2.2.3
+numpy==1.26.4
+pyarrow==23.0.1
+setuptools==81.0.0
+anywidget==0.11.0
+loguru==0.7.3
+python-dotenv==1.2.4
+tqdm==4.70.1
+typer==0.27.3
