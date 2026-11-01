@@ -83,7 +83,7 @@ def test_semilla_distinta_cambia_el_entrenamiento(muestra_train, monkeypatch):
 
 
 def test_ridge_tambien_es_reproducible(muestra_train):
-    """El baseline de P1 (Ridge) no depende de azar, pero debe ser estable."""
+    """El candidato Ridge de P1 no depende de azar, pero debe ser estable."""
     modelo_1 = build_model("ridge")
     modelo_1.fit(muestra_train[FEATURES], muestra_train[TARGET])
     modelo_2 = build_model("ridge")
