@@ -84,7 +84,7 @@ Si `pytest` falla con `assert 15376153 == 15376127` en `test_unified_parquet_exi
 
 ```bash
 python -m mibici.dataset --skip-download --force   # regenera el manifiesto local con tus datos (~1.5 min, sin volver a descargar)
-pytest                                             # ahora deben pasar las 29 pruebas
+pytest                                             # ahora deben pasar las 67 pruebas
 git restore data/manifest.json                     # no commitees el manifiesto regenerado
 ```
 
@@ -234,14 +234,18 @@ reports/figures/mlflow_evidencia/
 ```
 
 ## Pruebas de calidad y seguridad
-El proyecto incluye pruebas con `pytest` y validación de datos con `DeepChecks`.
+El proyecto incluye pruebas con `pytest`, validación de datos con `DeepChecks` y chequeos de seguridad (`bandit` + `pip-audit`).
 
-**Estructura de `test/`**
-- `test/test_data.py`: Pruebas para la datos de MiBici, validación de SHA-256 e integridad del parquet unificado, comportamiento del CLI.
-- `test/test_features.py`: Validación completa de características (tiempo por estación y hora), cálculo de variables, lags y la correcta generación de etiquetas de riesgo para clasificación (P2).
-- `test/test_modeling.py`: Verificación de los parámetros de tiempo de los splits, control de integridad mediante el hash, tags y validación de métricas de regresión.
+**Estructura de `tests/`** (7 archivos, 67 pruebas)
+- `tests/test_data.py` (12): datos de MiBici, validación de SHA-256 e integridad del parquet unificado, comportamiento del CLI y parsing de fechas. Incluye casos límite: header malformado de 2023-04, literales nulos y formato de fecha desconocido.
+- `tests/test_features.py` (13): cálculo de features por estación y hora, lags, media móvil, calendario, split temporal y etiqueta de riesgo de P2. Cubre casos límite como horas sin viajes, estación que empieza en su primer viaje y llegadas fuera de la ventana. Incluye `test_sin_fuga_de_informacion`.
+- `tests/test_modeling.py` (14): fechas de `config`, hash del parquet, tags de MLflow, métricas de regresión, selección por validación, silhouette de P3 y perfil de ventana. Casos límite: silhouette con una sola fila (`NaN`) y ventana de perfil vacía.
+- `tests/test_reproducibilidad.py` (3): dos entrenamientos con la misma semilla dan las mismas predicciones y métricas; con semilla distinta cambian (control negativo); Ridge es estable entre corridas.
+- `tests/test_register.py` (13): detección de modelo logueado, selección del mejor run por métrica de validación, fallback a corridas previas e idempotencia del registro con alias `@champion`.
+- `tests/test_proxy_riesgo.py` (11): construcción de la tabla de riesgo de P2, sensibilidad al umbral, top de estaciones y plots. Casos límite: estación sin desbalance, estación inexistente en nomenclatura y corte `n` exacto.
+- `tests/test_data_validation.py` (2): validación del esquema y de la corrida completa de DeepChecks (esta última corre solo con el entorno de validación creado).
 
-**Comando para ejecutar**
+**Comandos para ejecutar**
 Ya estando en el entorno virtual, es necesario ejecutar
 
 1. Pruebas unitarias `pytest`
@@ -251,72 +255,38 @@ pytest -v
 
 Salida ejemplo
   ```bash
-platform win32 -- Python 3.12.2, pytest-9.1.1, pluggy-1.7.0 -- D:\MNA\TC5061-Proyecto-Equipo01\.venv\Scripts\python.exe
+platform darwin -- Python 3.12.9, pytest-9.1.1, pluggy-1.7.0 -- .venv/bin/python
 cachedir: .pytest_cache
-rootdir: D:\MNA\TC5061-Proyecto-Equipo01
+rootdir: /Users/gerardocarreno/Documents/MaestriaTecMonterrey/CuartoTrimestre/MLOps/Semana_5/TC5061-Proyecto-Equipo01
 configfile: pyproject.toml
-plugins: anyio-4.15.1, platformdirs-4.13.7
-collected 29 items
+plugins: platformdirs-4.13.3, anyio-4.15.1
+collecting ... collected 67 items
 
-tests/test_data.py::test_catalog_cover_post_pandemic_history PASSED                      [  3%]
-tests/test_data.py::test_normalize_columns_canonical_schema PASSED                       [  6%]
-tests/test_data.py::test_normalize_columns_mangled_header_2023_04 PASSED                 [ 10%]
-tests/test_data.py::test_unified_parquet_exists_and_is_non_empty PASSED                  [ 13%]
-tests/test_data.py::test_manifest_is_versioned_and_complete PASSED                       [ 17%]
-tests/test_data.py::test_output_paths_limit_escribe_aparte PASSED                        [ 20%]
-tests/test_data.py::test_read_csv_normalized_handles_null_literals PASSED                [ 24%]
-tests/test_data.py::test_cli_aborts_without_force_when_parquet_exists PASSED             [ 27%]
-tests/test_data.py::test_cli_force_skips_confirmation_and_runs PASSED                    [ 31%]
-tests/test_data.py::test_fechas_dia_mes PASSED                                           [ 34%]
-tests/test_data.py::test_fechas_iso PASSED                                               [ 37%]
-tests/test_data.py::test_fechas_formato_desconocido PASSED                               [ 41%]
-tests/test_features.py::test_horas_sin_viajes_quedan_en_cero PASSED                      [ 44%]
-tests/test_features.py::test_estacion_empieza_en_su_primer_viaje PASSED                  [ 48%]
-tests/test_features.py::test_llegadas_despues_del_fin_no_se_cuentan PASSED               [ 51%]
-tests/test_features.py::test_calendario PASSED                                           [ 55%]
-tests/test_features.py::test_lags_y_media_movil PASSED                                   [ 58%]
-tests/test_features.py::test_promedio_misma_hora_semanas_anteriores PASSED               [ 62%]
-tests/test_features.py::test_neto PASSED                                                 [ 65%]
-tests/test_features.py::test_sin_fuga_de_informacion PASSED                              [ 68%]
-tests/test_features.py::test_datos_de_estacion PASSED                                    [ 72%]
-tests/test_features.py::test_split PASSED                                                [ 75%]
-tests/test_features.py::test_etiqueta_de_riesgo PASSED                                   [ 79%]
-tests/test_features.py::test_riesgo_no_mezcla_estaciones_ni_usa_estaciones_sin_capacidad PASSED     [ 82%]
-tests/test_modeling.py::test_fechas_de_config PASSED                                     [ 86%]
-tests/test_modeling.py::test_hash_del_parquet PASSED                                     [ 89%]
-tests/test_modeling.py::test_tags PASSED                                                 [ 93%]
-tests/test_modeling.py::test_metricas_prediccion_perfecta PASSED                         [ 96%]
-tests/test_modeling.py::test_modelo_no_soportado PASSED                                  [100%]
+tests/test_data.py::test_catalog_cover_post_pandemic_history PASSED      [  1%]
+tests/test_data.py::test_normalize_columns_canonical_schema PASSED       [  2%]
+tests/test_data.py::test_normalize_columns_mangled_header_2023_04 PASSED [  4%]
+tests/test_data.py::test_unified_parquet_exists_and_is_non_empty PASSED  [  5%]
+tests/test_data.py::test_manifest_is_versioned_and_complete PASSED       [  7%]
+tests/test_data.py::test_output_paths_limit_escribe_aparte PASSED        [  8%]
+...
+tests/test_reproducibilidad.py::test_misma_semilla_repite_predicciones_y_metricas PASSED [ 97%]
+tests/test_reproducibilidad.py::test_semilla_distinta_cambia_el_entrenamiento PASSED [ 98%]
+tests/test_reproducibilidad.py::test_ridge_tambien_es_reproducible PASSED [100%]
 
+================== 67 passed, 1 warning in 20.54s ===================
   ```
+
+> Para que las 67 corran hace falta el entorno de validación del punto 3 (`make validation_env`): sin él, `test_validacion_completa_con_deepchecks` se salta y el total queda en 66.
 
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\pytest`
 ![Pytest Success](reports/figures/evidencia_pruebas_calidad_seguridad/pytest.png)
-  
-2. Pruebas de modelado
+
+2. Pruebas de reproducibilidad del entrenamiento
   ```bash
-pytest tests/test_modeling.py -v
+pytest tests/test_reproducibilidad.py -v
   ```
 
-Salida ejemplo
-  ```bash
-platform win32 -- Python 3.12.2, pytest-9.1.1, pluggy-1.7.0 -- D:\MNA\TC5061-Proyecto-Equipo01\.venv\Scripts\python.exe
-cachedir: .pytest_cache
-rootdir: D:\MNA\TC5061-Proyecto-Equipo01
-configfile: pyproject.toml
-plugins: anyio-4.15.1, platformdirs-4.13.7
-collected 5 items
-
-tests/test_modeling.py::test_fechas_de_config PASSED                                     [ 20%]
-tests/test_modeling.py::test_hash_del_parquet PASSED                                     [ 40%]
-tests/test_modeling.py::test_tags PASSED                                                 [ 60%]
-tests/test_modeling.py::test_metricas_prediccion_perfecta PASSED                         [ 80%]
-tests/test_modeling.py::test_modelo_no_soportado PASSED                                  [100%]
-
-  ```
-
-Captura de pantalla de las pruebas de modelado, `reports\figures\evidencia_pruebas_calidad_seguridad\DeepChecks.png`
-![Pruebas de modelado](reports/figures/evidencia_pruebas_calidad_seguridad/DeepChecks.png)
+Verifica que dos entrenamientos con la misma semilla producen las mismas predicciones y métricas, que cambiar la semilla sí altera el resultado (control negativo) y que Ridge es estable entre corridas.
 
 3. Validación de datos con `DeepChecks`
 
@@ -337,6 +307,22 @@ uv pip install --python .venv-validacion\Scripts\python.exe -r requirements-vali
 
 La salida queda en `reports/data_validation/resumen.json`. Los hallazgos y las acciones tomadas están en [`reports/validacion_datos.md`](reports/validacion_datos.md).
 
+**Resumen del último chequeo** (15,376,127 viajes, semilla 42, muestras de 200,000 filas):
+
+| Chequeo | Resultado |
+|---|---|
+| Tipos de datos | `ok = True`, sin diferencias contra el esquema esperado |
+| Valores faltantes | `genero` 104,981 (0.68%) · `anio_nacimiento` 7,773 (0.05%) · resto 0 |
+| Duplicados | 758 filas exactas · 1,065 mismos viajes con otro `viaje_id` |
+| DeepChecks (muestra) | sin tipos mezclados · 0.0% de filas duplicadas |
+| Drift viajes (train vs test) | ninguna columna marcada · máx. `anio_nacimiento` 0.0788 (K-S) |
+| Drift features (train vs test) | ninguna columna marcada · máx. `mes` 0.1832 (Cramer's V) |
+
+El umbral de drift es 0.2 y ninguna columna lo alcanza. Las 758 filas duplicadas exactas ya se eliminan al generar las features.
+
+Captura de la ejecución de `make validate` con DeepChecks, `reports\figures\evidencia_pruebas_calidad_seguridad\DeepChecks.png`
+![Validación DeepChecks](reports/figures/evidencia_pruebas_calidad_seguridad/DeepChecks.png)
+
 4. Análisis de calidad
   ```bash
 ruff check .
@@ -348,7 +334,18 @@ All checks passed!
   ```
 
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\ruff.png`
-![Security Success](reports/figures/evidencia_pruebas_calidad_seguridad/ruff.png)
+![Lint Success](reports/figures/evidencia_pruebas_calidad_seguridad/ruff.png)
+
+5. Chequeos de seguridad (`bandit` + `pip-audit`)
+  ```bash
+make security
+  ```
+
+Los reportes quedan en `reports/security/bandit_report.txt` y `reports/security/pip_audit_report.txt`.
+
+Captura de la ejecución de `make security`, `reports\figures\evidencia_pruebas_calidad_seguridad\security.png`
+![Security Success](reports/figures/evidencia_pruebas_calidad_seguridad/security.png)
+
 ### Comparación de Familias de Modelos
 
 Explorarando múltiples algoritmos, el pipeline de entrenamiento ahora compara distintas familias de modelos utilizando *nested runs* en MLflow para cada pregunta de investigación:
@@ -377,9 +374,9 @@ python -m mibici.modeling.train p3-search
 
 Para garantizar que el repositorio no exponga credenciales ni dependencias vulnerables, integramos herramientas de análisis estático y auditoría de seguridad:
 
-- **Chequeo de credenciales (Issue #102):** El archivo `.gitignore` excluye explícitamente `.env`, bases de datos locales (`mlflow.db`) y datos crudos (`data/raw/`). Se verificó en el historial mediante `git ls-files` que no existen secretos expuestos. Asimismo, una búsqueda con `git grep` descartó credenciales hardcodeadas.
-- **Análisis estático (Bandit v1.8.0):** Se ejecuta sobre el directorio `mibici/`. Se detectaron 5 alertas de severidad baja (Low) asociadas al uso de `subprocess` en `tracking.py` y `mlflow_entry.py`. **Justificación (Issue #101):** Estas alertas se asumen como seguras ya que los subprocesos solo ejecutan comandos internos de infraestructura (`git rev-parse HEAD` y llamadas nativas a Python), sin procesar *input* externo no confiable.
-- **Auditoría de dependencias (pip-audit v2.7.3):** El escaneo inicial detectó la vulnerabilidad *CVE-2026-53995* en la librería `mlflow` (v3.17.0). **Resolución:** Se mitigó el riesgo actualizando la dependencia a `mlflow==3.17.2` en el archivo `requirements.txt`, resultando en una auditoría limpia.
+- **Chequeo de credenciales (Issue #102):** El archivo `.gitignore` excluye explícitamente `.env`, bases de datos locales (`mlflow.db`) y datos crudos (`data/raw/`). Se verificó en el historial mediante `git ls-files` que no existen secretos expuestos. Asimismo, una búsqueda con `git grep` descartó credenciales hardcodeadas. La plantilla versionada es [`.env.example`](.env.example): se copia a `.env` (no versionado) y se edita.
+- **Análisis estático (Bandit v1.9.4):** Se ejecuta sobre el directorio `mibici/`. Se detectaron 5 alertas de severidad baja (Low) asociadas al uso de `subprocess` en `tracking.py` y `mlflow_entry.py`. **Justificación (Issue #101):** Estas alertas se asumen como seguras ya que los subprocesos solo ejecutan comandos internos de infraestructura (`git rev-parse HEAD` y llamadas nativas a Python), sin procesar *input* externo no confiable. El reporte completo está en `reports/security/bandit_report.txt`.
+- **Auditoría de dependencias (pip-audit v2.10.1):** El escaneo inicial detectó la vulnerabilidad *CVE-2026-53995* en la librería `mlflow` (v3.17.0). **Resolución:** Se mitigó el riesgo actualizando la dependencia a `mlflow==3.17.2` en el archivo `requirements.txt`, resultando en una auditoría limpia. El reporte está en `reports/security/pip_audit_report.txt`.
 
 Para ejecutar automatizadamente los chequeos de seguridad (Issue #101), utiliza el siguiente comando de `make`:
 ```bash
