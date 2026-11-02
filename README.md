@@ -419,7 +419,7 @@ make check-all
 │   └── figures        <- Gráficas para el reporte (evidencia MLflow, etc.)
 ├── reports
 │   └── evidencia_pruebas_calidad_seguridad  <- Capturas de pytest, deepchecks y seguridad
-│
+│   └── pr_team       <- PR semanal│
 ├── requirements.txt   <- Dependencias fijadas (reproducibilidad)
 │
 ├── mibici             <- Código fuente
