@@ -2,6 +2,15 @@
 
 La tabla reúne los PRs del equipo del 26 de octubre al 1 de noviembre de 2026 y enlaza sus evidencias disponibles.
 
+## Resumen por integrante
+| Nombre | Creó | Revisó |
+|---|---|---|
+| @GemmaMartinez | #113 — documentación de pruebas y README; #116 — README y limpieza/privacidad; #119 — evidencia de PRs y revisiones | #110 — selección de modelos con métricas de validación (aprobó); #114 — pruebas de reproducibilidad (aprobó y comentó); #115 — pruebas de cobertura (aprobó y comentó); #121 — evidencia de calidad y seguridad (aprobó y comentó) |
+| @JesusTafolla | #111 — actualización de MLflow por CVE; #112 — búsqueda de modelos y umbrales | #110 — métricas de validación (aprobó y comentó); #114 — pruebas de reproducibilidad (aprobó y comentó); #115 — pruebas de cobertura (aprobó y comentó); #120 — comparación de baselines y candidatos (aprobó y comentó) |
+| @laloz60 | #110 — selección de modelos con métricas de validación; #114 — pruebas de reproducibilidad; #115 — pruebas de cobertura; #121 — evidencia de calidad y seguridad | #111 — actualización de MLflow por CVE (aprobó y comentó); #112 — búsqueda de modelos y umbrales (aprobó y comentó); #113 — documentación de pruebas y README (aprobó y comentó); #116 — README y limpieza/privacidad (aprobó y comentó); #117 — validación de datos y duplicados (aprobó y comentó); #118 — baseline de cuatro semanas para P1 (aprobó y comentó); #119 — evidencia de PRs (aprobó y comentó) |
+| @smuciton | #117 — validación de datos y duplicados; #118 — baseline de cuatro semanas para P1; #120 — comparación de baselines y candidatos | #114 — pruebas de reproducibilidad (aprobó y comentó); #115 — pruebas de cobertura (aprobó y comentó); #119 — evidencia de PRs (comentó) |
+
+## Resumen por PR
 | PR/Commit | Título | Autor | Aprobado | Comentado | Fecha de creación | Fecha de merge | PDF | Screenshot |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | #110<br>`a5ae20d` | fix(mlflow): seleccionar modelos de P1-P2-P3 con métricas de validación | @laloz60 | @JesusTafolla<br>@GemmaMartinez | @JesusTafolla | 26-10-2026 | 28-10-2026 | [PR_110.pdf](pdf/PR_110.pdf) | [pr_110.png](screenshot/pr_110.png) |
@@ -13,7 +22,10 @@ La tabla reúne los PRs del equipo del 26 de octubre al 1 de noviembre de 2026 y
 | #116<br>`d2257ab` | docs: actualiza README y doc limpieza y privacidad (ISSUE #107) | @GemmaMartinez | @laloz60 | @laloz60 | 30-10-2026 | 31-10-2026 | [PR_116.pdf](pdf/PR_116.pdf) | [pr_116.png](screenshot/pr_116.png) |
 | #117<br>`6248328` | feat(data): validar datos con DeepChecks y quitar viajes duplicados de las features- #117 | @smuciton | @laloz60 | @laloz60 | 30-10-2026 | 31-10-2026 | [PR_117.pdf](pdf/PR_117.pdf) | [pr_117.png](screenshot/pr_117.png) |
 | #118<br>`5b73a30` | feat: usa la regla de 4 semanas como baseline de P1 | @smuciton | @laloz60 | @laloz60 | 31-10-2026 | 31-10-2026 | [PR_118.pdf](pdf/PR_118.pdf) | [pr_118.png](screenshot/pr_118.png) |
-| #119 | @GemmaMartinez | @laloz60 | @smuciton<br>@laloz60 | 31-10-2026 | 31-10-2026 | - | - |
+| #119 | docs: agrega evidencia de PRs y revisiones por integrante (ISSUE #108) | @GemmaMartinez | @laloz60 | @smuciton<br>@laloz60 | 31-10-2026 | 31-10-2026 | Se coloca en la siguiente entrega, el merge se hará el 01/11/2026 por la noche con el fin que no falte ningún PR |
+| #120<br>`3b157ac` | docs: agrega comparacion de baseline contra candidato en P1, P2 y P3  |  @smuciton | @JesusTafolla | @JesusTafolla | 31-10-2026 | 01-11-2026 | 01-11-2026 |[PR_120.pdf](pdf/PR_120.pdf) | [pr_120.png](screenshot/pr_120.png) |
+| #121<br>`d31c660`  |docs(calidad): evidencia real de pytest, DeepChecks y seguridad (Actividad 7)|  @laloz60 | @GemmaMartinez | @GemmaMartinez | 31-10-2026 | 01-11-2026 |[PR_121.pdf](pdf/PR_121.pdf) | [pr_121.png](screenshot/pr_121.png) |
+
 
 Nota: Del PR #119 se pueden poner las evidencias a inicio de la siguiente semana con el fin de no dejar pasar ningún PR.
 
