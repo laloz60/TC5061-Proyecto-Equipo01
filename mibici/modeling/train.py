@@ -24,8 +24,8 @@ import pandas as pd
 import seaborn as sns
 from sklearn.cluster import KMeans
 from sklearn.dummy import DummyClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     PrecisionRecallDisplay,
     average_precision_score,
@@ -506,9 +506,14 @@ def train_p1_search(
     import json
     import warnings
 
-    from mibici.config import FIGURES_DIR, MODELS_DIR
-    from mibici.modeling.regression import (FEATURES, TARGET,
-        build_model, load_p1_data, regression_metrics,)
+    from mibici.config import MODELS_DIR
+    from mibici.modeling.regression import (
+        FEATURES,
+        TARGET,
+        build_model,
+        load_p1_data,
+        regression_metrics,
+    )
     from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
 
     warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.utils.parallel") # Ignorar la advertencia
