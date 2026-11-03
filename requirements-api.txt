@@ -1,0 +1,11 @@
+# Dependencias solo para la API REST (Actividad 8 - despliegue con Docker).
+# Versiones fijadas para reproducibilidad, alineadas con requirements.txt.
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic==2.14.2
+mlflow==3.17.2
+scikit-learn==1.9.1
+pandas==3.0.6
+numpy==2.5.4
+python-dotenv==1.2.4
+requests==2.34.2

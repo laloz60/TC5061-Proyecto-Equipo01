@@ -1,0 +1,29 @@
+# Exclusiones para el contexto de construcción de la imagen
+.git/
+.github/
+.venv/
+.venv-validacion/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Datos y artefactos pesados (no necesarios en la imagen)
+data/
+mlruns/
+mlartifacts/
+mlflow.db
+*.db
+models/*.pkl
+models/*.joblib
+models/*.onnx
+notebooks/
+reports/
+references/
+docs/
+
+# Secretos y SO
+.env
+.env.*
+!.env.example
+.DS_Store
