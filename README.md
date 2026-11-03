@@ -404,6 +404,21 @@ make check-all
 
 - **Limpieza y privacidad:** consulta la [preparación y protección de datos](docs/clean_doc).
 
+## Despliegue de Modelos (API REST con Docker)
+
+Se empaquetaron los modelos de Regresión (P1), Clasificación (P2) y Clustering (P3) en una API REST con **FastAPI** y validación de datos mediante **Pydantic**. 
+
+**Inferencia dinámica:** El contenedor no lleva modelos pre-cargados. A través de la variable `MLFLOW_TRACKING_URI`, se conecta al servidor local de MLflow y carga en memoria RAM los modelos con alias `@champion`, asegurando servir siempre la última versión sin reconstruir la imagen OCI.
+
+### 1. Construir y ejecutar la API
+Gracias al `Makefile`, el proceso de despliegue está automatizado.
+Asegúrate de tener corriendo tu servidor de MLflow (ver [Experimentos](#experimentos-mlflow)). Luego, ejecuta:
+
+```bash
+make docker-build   # Construye la imagen mibici-api:latest
+make docker-run     # Levanta el contenedor en el puerto 8000
+```
+
 
 ## Estructura del proyecto
 
