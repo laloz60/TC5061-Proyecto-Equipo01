@@ -424,12 +424,12 @@ Levanta el contenedor mapeando el localhost de tu máquina hacia adentro del con
 
 ```bash
 docker run -d -p 8000:8000 \
-  -e MLFLOW_TRACKING_URI="[http://host.docker.internal:5000](http://host.docker.internal:5000)" \
+  `-e MLFLOW_TRACKING_URI="[http://host.docker.internal:5000](http://host.docker.internal:5000)"`. \
   --name mibici-service \
   mibici-api
 ```
 
-## 3. Endpoints y Consumo de la API
+## Endpoints y Consumo de la API
 Una vez que el contenedor esté corriendo, la documentación interactiva Swagger estará disponible en:
 http://localhost:8000/docs
 
@@ -437,7 +437,6 @@ A continuación, se muestran ejemplos de cómo consumir cada uno de los endpoint
 
 ### Endpoint P1: Predicción de Demanda (Regresión)
 Predice cuántos viajes iniciarán en una estación en la siguiente hora.
-
 
 ```bash
 curl -X 'POST' \
