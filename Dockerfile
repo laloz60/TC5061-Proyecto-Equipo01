@@ -8,19 +8,15 @@ ENV PYTHONUNBUFFERED=1
 # Configura el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Instala dependencias del sistema necesarias para compilar librerías (ej. numpy, scipy)
+# Instala dependencias del sistema necesarias para compilar librerías
 RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
 
-# Copia los archivos de requerimientos e instálalos
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copia todo el código del proyecto al contenedor
+# Copia TODO el código del proyecto al contenedor primero (incluyendo pyproject.toml)
 COPY . /app/
 
-# Instala el paquete local en modo edición para que Python reconozca el módulo `mibici`
-RUN pip install -e .
+# Instala dependencias y el paquete local (-e .) indicado en tu requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Expone el puerto que usará FastAPI
 EXPOSE 8000
