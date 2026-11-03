@@ -121,6 +121,15 @@ mlflow server --backend-store-uri sqlite:///mlflow.db --port 5000
 # UI en http://127.0.0.1:5000
 ```
 
+> **Despliegue en contenedor (Actividad 8):** para que un contenedor Docker alcance este servidor hay que levantarlo además con `MLFLOW_SERVER_ALLOWED_HOSTS`. Sin esa variable, MLflow rechaza las peticiones que llegan con `Host: host.docker.internal:5000` (protección DNS rebinding) y responde `403 Invalid Host header`:
+>
+> ```bash
+> MLFLOW_SERVER_ALLOWED_HOSTS="localhost:5000,127.0.0.1:5000,host.docker.internal:5000" \
+>   mlflow server --backend-store-uri sqlite:///mlflow.db --port 5000
+> ```
+>
+> En macOS, si el puerto 5000 devuelve `403 Server: AirTunes`, lo que responde es el receptor AirPlay de ControlCenter, no MLflow: verifica que el servidor esté corriendo antes de levantar el contenedor (ver issue #124).
+
 En otra terminal (o antes de lanzar cualquier corrida), apunta la variable de entorno al servidor para que todos los runs se registren ahí:
 
 ```bash
