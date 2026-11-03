@@ -404,7 +404,7 @@ make check-all
 
 - **Limpieza y privacidad:** consulta la [preparación y protección de datos](docs/clean_doc).
 
-## Despliegue de Modelos (API REST con Docker) - Actividad 8
+## Despliegue de Modelos (API REST con Docker)
 
 Se empaquetaron los modelos de Regresión (P1), Clasificación (P2) y Clustering (P3) en una API REST con **FastAPI** y validación de datos mediante **Pydantic**. 
 
