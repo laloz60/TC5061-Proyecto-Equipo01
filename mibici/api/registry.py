@@ -1,4 +1,4 @@
-"""Carga de modelos desde el Model Registry (Actividad 8, issue #126).
+"""Carga de modelos desde el Model Registry para el contenedor (Actividad 8).
 
 Flujo robusto para el contenedor:
 1. Intenta ``models:/<nombre>@champion`` (funciona en el host).

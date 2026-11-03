@@ -4,8 +4,8 @@ from pydantic import BaseModel, Field
 class ModelFeaturesInput(BaseModel):
     """Las 15 features exactas del input schema de los modelos P1/P2.
 
-    Verificado contra el Model Registry (issue #126): los modelos no
-    reciben estacion_id, y sí incluyen los lags y medias históricas.
+    Verificado contra el Model Registry: los modelos no reciben
+    estacion_id, y sí incluyen los lags y medias históricas.
     """
 
     hora_del_dia: int = Field(ge=0, le=23)

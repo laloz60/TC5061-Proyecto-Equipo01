@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     mlflow.set_tracking_uri(tracking_uri)
     logger.info(f"Conectando al Model Registry en: {tracking_uri}")
     # load_champion intenta models:/<nombre>@champion y, dentro del contenedor,
-    # cae al proxy mlflow-artifacts (issue #126)
+    # cae al proxy mlflow-artifacts
     for key in ("p1", "p2", "p3"):
         try:
             ml_models[key] = load_champion(key)

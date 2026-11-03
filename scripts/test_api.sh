@@ -12,7 +12,7 @@ curl -sS -m 10 "${BASE_URL}/health" -w "\nHTTP status: %{http_code}\n"
 echo
 
 # Payload con las 15 features del input schema de los modelos P1/P2
-# (mibici/api/schemas.py - verificado contra el Model Registry, issue #126)
+# (mibici/api/schemas.py - verificado contra el Model Registry)
 REQUEST_BODY='{
   "hora_del_dia": 8,
   "dia_semana": 5,
