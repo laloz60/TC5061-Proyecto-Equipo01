@@ -396,6 +396,125 @@ make check-all
 - **Limpieza y privacidad:** consulta la [preparación y protección de datos](docs/clean_doc).
 
 
+# Despliegue de Modelos (API REST con Docker)
+
+Este proyecto expone los modelos de Regresión (P1), Clasificación (P2) y Clustering (P3) del sistema MiBici a través de una API REST construida con **FastAPI** y empaquetada en un contenedor bajo el estándar OCI (Docker/Podman).
+
+## Estrategia de Despliegue Elegida
+**Inferencia en tiempo real mediante inyección desde el Model Registry:**
+El contenedor arranca como un servicio ligero y, mediante la variable de entorno `MLFLOW_TRACKING_URI`, se conecta al servidor local de MLflow para descargar en memoria RAM los modelos etiquetados con el alias `@champion` (Producción). Esto permite que la API siempre sirva la última versión aprobada sin necesidad de reconstruir la imagen de Docker tras cada reentrenamiento.
+
+## 1. Construir la imagen del contenedor
+Procede a instalar Docker en tu entorno/maquina.
+Despues enciende el sericio de Docker nativo (Si usas Linux/Ubuntu)
+Si no tienes Docker Desktop abierto, necesitas iniciar el motor desde la consola con el siguiente comando:
+```bash
+sudo systemctl start docker
+```
+
+Asegúrate de estar en la raíz del repositorio (donde se encuentra el `Dockerfile`) y ejecuta:
+```bash
+# Si usas Docker:
+docker build -t mibici-api .
+```
+
+## 2. Levantar el contenedor
+Antes de levantar el contenedor, tu servidor local de MLflow debe estar en ejecución en el puerto 5000.
+Levanta el contenedor mapeando el localhost de tu máquina hacia adentro del contenedor usando host.docker.internal:
+
+```bash
+docker run -d -p 8000:8000 \
+  -e MLFLOW_TRACKING_URI="[http://host.docker.internal:5000](http://host.docker.internal:5000)" \
+  --name mibici-service \
+  mibici-api
+```
+
+## 3. Endpoints y Consumo de la API
+Una vez que el contenedor esté corriendo, la documentación interactiva Swagger estará disponible en:
+http://localhost:8000/docs
+
+A continuación, se muestran ejemplos de cómo consumir cada uno de los endpoints desde la terminal usando curl:
+
+### Endpoint P1: Predicción de Demanda (Regresión)
+Predice cuántos viajes iniciarán en una estación en la siguiente hora.
+
+
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/predict/p1-demanda' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "estacion_id": 12,
+  "hora_del_dia": 8,
+  "dia_semana": 0,
+  "es_fin_de_semana": 0,
+  "mes": 5,
+  "capacidad": 20.0,
+  "latitud": 20.67,
+  "longitud": -103.35,
+  "salidas_lag_1h": 5.0,
+  "neto_lag_1h": 2.0
+}'
+```
+
+Respuesta:
+```json
+{
+  "demanda_predicha_viajes": 6.84
+}
+```
+
+### Endpoint P2: Riesgo de Desabasto (Clasificación)
+Predice si la estación se quedará vacía o saturada en el horizonte de horas definido.
+
+
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/predict/p2-riesgo' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "estacion_id": 54,
+  "hora_del_dia": 18,
+  "dia_semana": 4,
+  "es_fin_de_semana": 0,
+  "mes": 10,
+  "capacidad": 15.0,
+  "latitud": 20.68,
+  "longitud": -103.36
+}'
+```
+
+Respuesta:
+```
+json
+{
+  "riesgo_desabasto_o_saturacion": 1,
+  "probabilidad_riesgo": 0.82
+}
+```
+
+
+### Endpoint P3: Perfilado de Estaciones (Clustering)
+Clasifica una estación en un grupo basándose en su perfil de uso diario de 24 horas (valores normalizados).
+
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/predict/p3-clustering' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "perfil_horario": [0.01, 0.01, 0.01, 0.01, 0.01, 0.05, 0.1, 0.15, 0.08, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+}'
+```
+
+Respuesta:
+
+```json
+{
+  "cluster_asignado": 2
+}
+```
+```
+
 ## Estructura del proyecto
 
 ```
@@ -430,7 +549,10 @@ make check-all
 │   │   ├── train.py       <- Entrenamiento P1/P2/P3
 │   │   └── predict.py     <- Inferencia
 │   ├── reportes_p3.py     <- Regenera summary y figuras de P3 sin binarios
-│   └── plots.py           <- Visualizaciones
+│   ├── plots.py           <- Visualizaciones
+│   └── api
+│       ├── main.py        <- Endpoints de prediccion(P1, P2 y P3)
+│       └──schema          <- Esquema de validacion de datos (Pydantic)
 │
 └── tests              <- Pruebas (pytest)
 ```
