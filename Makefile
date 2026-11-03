@@ -80,6 +80,23 @@ validate:
 .PHONY: check-all
 check-all: test validate security
 
+## Build the API container image (Docker)
+.PHONY: docker-build
+docker-build:
+	docker build -t mibici-api:latest .
+
+## Run the API container (requires the MLflow server running on the host, see README)
+.PHONY: docker-run
+docker-run:
+	docker run --rm -p 8000:8000 --name mibici-api \
+		-e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+		mibici-api:latest
+
+## Test the running container: health check, prediction and invalid input (issue #125)
+.PHONY: docker-test
+docker-test:
+	bash scripts/test_api.sh
+
 ## Set up Python interpreter environment
 .PHONY: create_environment
 create_environment:
