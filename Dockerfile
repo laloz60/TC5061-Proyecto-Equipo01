@@ -10,10 +10,9 @@ RUN pip install --no-cache-dir -r requirements-api.txt
 
 # Código del proyecto
 COPY mibici/ ./mibici/
-COPY pyproject.toml .
-COPY README.md .
-COPY LICENSE .
-RUN pip install --no-cache-dir --no-deps .
+# import mibici resuelve desde /app sin instalar el paquete: cambiar un .py
+# solo re-ejecuta este COPY (la capa de dependencias queda cacheada)
+ENV PYTHONPATH=/app
 
 # Servidor MLflow en la máquina anfitriona (issue #124)
 ENV MLFLOW_TRACKING_URI=http://host.docker.internal:5000
