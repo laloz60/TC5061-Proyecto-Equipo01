@@ -114,21 +114,15 @@ Esta etapa evalúa y predice si una estación se encuentra en riesgo de desabast
 
 ### Servidor de tracking
 
-El Model Registry necesita un almacenamiento respaldado por base de datos, así que el tracking se levanta con un servidor local sobre SQLite:
+El Model Registry necesita un almacenamiento respaldado por base de datos, así que el tracking se levanta con un servidor local sobre SQLite. Lánzalo **desde la raíz del repo** (ahí viven `mlflow.db` y `mlruns/`):
 
 ```bash
-mlflow server --backend-store-uri sqlite:///mlflow.db --port 5000
+mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlruns --port 5000
 # UI en http://127.0.0.1:5000
 ```
 
-> **Despliegue en contenedor (Actividad 8):** para que un contenedor Docker alcance este servidor hay que levantarlo además con `MLFLOW_SERVER_ALLOWED_HOSTS`. Sin esa variable, MLflow rechaza las peticiones que llegan con `Host: host.docker.internal:5000` (protección DNS rebinding) y responde `403 Invalid Host header`:
->
-> ```bash
-> MLFLOW_SERVER_ALLOWED_HOSTS="localhost:5000,127.0.0.1:5000,host.docker.internal:5000" \
->   mlflow server --backend-store-uri sqlite:///mlflow.db --port 5000
-> ```
->
-> En macOS, si el puerto 5000 devuelve `403 Server: AirTunes`, lo que responde es el receptor AirPlay de ControlCenter, no MLflow: verifica que el servidor esté corriendo antes de levantar el contenedor (ver issue #124).
+`--artifacts-destination ./mlruns` hace que el servidor sirva los artefactos por HTTP (`mlflow-artifacts:/`). Para correr en el host no hace falta, pero el contenedor sí lo necesita para descargar los modelos (ver [Conexión del contenedor con MLflow](#conexión-del-contenedor-con-mlflow)).
+
 
 En otra terminal (o antes de lanzar cualquier corrida), apunta la variable de entorno al servidor para que todos los runs se registren ahí:
 
@@ -419,6 +413,62 @@ make docker-build   # Construye la imagen mibici-api:latest
 make docker-run     # Levanta el contenedor en el puerto 8000
 ```
 
+### Conexión del contenedor con MLflow
+
+El contenedor llega al servidor MLflow de la máquina anfitriona por el hostname `host.docker.internal`. Para que funcione, hacen falta tres cosas:
+
+| Dónde | Qué | Para qué |
+|---|---|---|
+| Servidor (host) | `MLFLOW_SERVER_ALLOWED_HOSTS="localhost:5000,127.0.0.1:5000,host.docker.internal:5000"` | Sin ella MLflow rechaza el `Host` del contenedor (protección DNS rebinding) con `403 Invalid Host header` |
+| Servidor (host) | `--artifacts-destination ./mlruns` | Sirve los artefactos por HTTP; el `artifact_uri` guardado es una ruta local del host que no existe dentro del contenedor |
+| Contenedor | `MLFLOW_TRACKING_URI=http://host.docker.internal:5000` | Ya viene en el `Dockerfile`; se puede sobrescribir con `-e` |
+| Contenedor (Linux) | `--add-host=host.docker.internal:host-gateway` | En Linux el hostname no existe por defecto; Docker Desktop (Windows/macOS) ya lo resuelve, y el flag no estorba |
+
+Levantar el servidor:
+
+```bash
+# bash / macOS / Linux
+MLFLOW_SERVER_ALLOWED_HOSTS="localhost:5000,127.0.0.1:5000,host.docker.internal:5000" \
+  mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlruns --port 5000
+```
+```powershell
+# PowerShell
+$env:MLFLOW_SERVER_ALLOWED_HOSTS = "localhost:5000,127.0.0.1:5000,host.docker.internal:5000"
+mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlruns --port 5000
+```
+```cmd
+:: CMD (sin comillas ni espacios)
+set MLFLOW_SERVER_ALLOWED_HOSTS=localhost:5000,127.0.0.1:5000,host.docker.internal:5000
+mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlruns --port 5000
+```
+
+Verificar desde el contenedor que los tres modelos `@champion` se resuelven y cargan:
+
+```bash
+docker run --rm --add-host=host.docker.internal:host-gateway \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  --mount type=bind,source="$(pwd)/scripts",target=/app/scripts,readonly \
+  mibici-api:latest python scripts/verificar_registry.py
+```
+
+Errores comunes:
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `403 Invalid Host header` | Falta `MLFLOW_SERVER_ALLOWED_HOSTS` | Reiniciar el servidor con la variable |
+| `No such artifact: ''` o fallo al descargar | Servidor sin `--artifacts-destination` | Reiniciar el servidor con `--artifacts-destination ./mlruns` |
+| `Connection refused` | Servidor apagado, o lanzado con `--host 127.0.0.1` en Linux | Levantarlo; en Linux usar `--host 0.0.0.0` |
+| `403 Server: AirTunes` (macOS) | AirPlay ocupa el puerto 5000 | Apagar el receptor AirPlay o usar otro puerto |
+| `"docker" no se reconoce` (Windows) | La terminal se abrió antes de instalar Docker Desktop | Reiniciar VS Code o la terminal |
+
+**Alternativa evaluada: empaquetar el modelo en la imagen.** Consiste en descargar los artefactos del registry al construir la imagen y cargarlos desde disco, sin servidor MLflow en tiempo de ejecución.
+
+- A favor: la imagen es autocontenida y arranca sin depender del host.
+- En contra: cada versión nueva del modelo obliga a reconstruir la imagen, y se pierde la trazabilidad en vivo con el alias `@champion`.
+
+Elegimos la carga dinámica porque promover un modelo en el registry basta para que el servicio lo tome con solo reiniciar el contenedor.
+
+La evidencia de esta validación está en [`reports/api/evidencia_conexion_contenedor.md`](reports/api/evidencia_conexion_contenedor.md).
 
 ## Estructura del proyecto
 
