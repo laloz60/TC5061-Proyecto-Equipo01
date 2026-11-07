@@ -111,5 +111,11 @@ de entradas y salidas. La contenerización con Docker queda demostrada de extrem
 
 ## Captura de pantalla
 
-La captura del terminal con la petición y la respuesta JSON se adjunta en el
-issue #125.
+Petición y respuesta contra el contenedor en marcha, desde el Swagger UI en
+`http://localhost:8000/docs` (endpoint `POST /predict/p1-demanda`):
+
+![Petición y respuesta de la API desde el contenedor](../figures/evidencia_actividad8_contenedor/01_swagger_predict_p1.png)
+
+Se ve el `curl` con las 15 features, la `Request URL`
+(`http://localhost:8000/predict/p1-demanda`), la respuesta **200** y el body
+`{"demanda_predicha_viajes": 5.62064537137125}`.
