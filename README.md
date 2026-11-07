@@ -203,6 +203,31 @@ La comparación de baseline contra candidato de cada pregunta está en [`reports
   modelo = mlflow.pyfunc.load_model("models:/mibici-equipo01-p2-riesgo@champion")
   ```
 
+#### Ubicación del registry y modelos desplegados
+
+El Model Registry vive en la **máquina anfitriona**: los metadatos en `mlflow.db` (SQLite) y los artefactos en `mlruns/`, servidos por el servidor MLflow del puerto 5000. La API **no lleva modelos dentro de la imagen**: al arrancar, se conecta a ese servidor con `MLFLOW_TRACKING_URI` y carga los tres modelos `@champion`. Para publicar una versión nueva basta con mover el alias en el registry y reiniciar el contenedor, sin reconstruir la imagen.
+
+Modelos que sirve la API:
+
+| Pregunta | Modelo registrado | Versión `@champion` | Run de origen | Endpoint |
+|---|---|---|---|---|
+| P1 | `mibici-equipo01-p1-demanda` | 2 | `p1-candidate-rf-n200` (`41e42807…`) | `POST /predict/p1-demanda` |
+| P2 | `mibici-equipo01-p2-riesgo` | 2 | `P2-parent-search-logreg`, C=1.0 (`3ad75953…`) | `POST /predict/p2-riesgo` |
+| P3 | `mibici-equipo01-p3-grupos` | 2 | `p3-candidate-k3` (`9fa2a199…`) | `POST /predict/p3-clustering` |
+
+La carga la hace `mibici/api/registry.py` (`load_champion`) en dos pasos:
+
+1. **En el host**, `mlflow.pyfunc.load_model("models:/<nombre>@champion")` carga directo, porque la ruta local de los artefactos existe.
+2. **En el contenedor**, ese paso falla con `No such artifact: ''`, porque el registry guarda una ruta local del host. Entonces resuelve el alias con `MlflowClient` y descarga los artefactos por el proxy `mlflow-artifacts:/` del servidor. Por eso el servidor necesita `--artifacts-destination ./mlruns` (ver [Conexión del contenedor con MLflow](#conexión-del-contenedor-con-mlflow)).
+
+Para comprobar qué versión resuelve cada alias y que los tres modelos cargan:
+
+```bash
+python scripts/verificar_registry.py
+```
+
+> La versión 2 de los tres modelos se registró antes de que `register` eligiera por métricas de validación, así que sus runs solo tienen métricas `test_*`. Volver a correr `-e register` puede crear una versión 3 y mover `@champion`: después de hacerlo, revisa esta tabla con `scripts/verificar_registry.py`.
+
 ### Ejecución directa (sin MLflow Project)
 
 Útil para desarrollo. Para reproducir la entrega usa los comandos `mlflow run` de arriba. Las búsquedas con nested runs de P1 y P3 hoy solo se lanzan así: `python -m mibici.modeling.train p1-search` y `python -m mibici.modeling.train p3-search`.
