@@ -89,6 +89,7 @@ docker-build:
 .PHONY: docker-run
 docker-run:
 	docker run --rm -p 8000:8000 --name mibici-api \
+		--add-host=host.docker.internal:host-gateway \
 		-e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
 		mibici-api:latest
 
