@@ -495,6 +495,80 @@ Elegimos la carga dinámica porque promover un modelo en el registry basta para 
 
 La evidencia de esta validación está en [`reports/api/evidencia_conexion_contenedor.md`](reports/api/evidencia_conexion_contenedor.md).
 
+## Despliegue de modelos (API REST con Docker)
+
+El servicio expone modelos de regresión (P1), clasificación (P2) y clustering (P3) mediante una API REST implementada con FastAPI y validación de datos con Pydantic. Los modelos no se incluyen en la imagen: el servicio los carga desde el Model Registry de MLflow al iniciar.
+
+### Requisitos
+
+- Docker instalado y en ejecución.
+- Servidor MLflow accesible desde el contenedor.
+- Modelos registrados en MLflow.
+
+### Construir la imagen
+
+Desde la raíz del repositorio:
+
+```bash
+docker build -t mibici-api:latest . 
+```
+Construye la imagen `mibici-api` con la etiqueta `latest` usando el `Dockerfile` de la raíz del repositorio.
+
+### Levantar el contenedor
+
+```bash
+docker run -d \
+  -p 8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  --name mibici-service \
+  mibici-api:latest
+```
+
+En Linux, agrega `--add-host` al comando:
+
+```bash
+docker run -d \
+  --add-host=host.docker.internal:host-gateway \
+  -p 8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  --name mibici-service \
+  mibici-api:latest
+```
+
+La documentación interactiva de la API está disponible en [http://localhost:8000/docs](http://localhost:8000/docs).
+
+
+### Ejemplo de consumo de la API
+
+La salida de make `docker-test`:
+```bash
+== 1. Health check ==
+{"status":"healthy","modelos_cargados":["p1","p2","p3"]}   HTTP 200
+
+== 2. P1 ==
+{"demanda_predicha_viajes":5.620645371371248}   HTTP 200
+
+== 3. P2 ==
+{"riesgo_desabasto_o_saturacion":1,"probabilidad_riesgo":0.7448901989148815}   HTTP 200
+
+== 4. P3 ==
+{"cluster_asignado":2}   HTTP 200
+
+== 5. Payload invalido ==   HTTP 422
+```
+
+Consulta el [detalle de la prueba](reports/api/evidencia_actividad8_contenedor.md).
+
+![Petición y respuesta de la API](reports/figures/evidencia_actividad8_contenedor/01_swagger_predict_p1.png)
+
+### Estrategia de despliegue
+
+Se eligió inferencia en tiempo real mediante una API REST síncrona. Cada petición se procesa al recibirse, en lugar de agrupar solicitudes para ejecutarlas por lotes.
+
+### Ubicación del Model Registry
+
+El servicio consulta el Model Registry de MLflow mediante `MLFLOW_TRACKING_URI`. Al iniciar, carga los modelos registrados con el alias `@champion`; por ello, actualizar el modelo en el registry y reiniciar el contenedor permite servir la nueva versión sin reconstruir la imagen.
+
 ## Estructura del proyecto
 
 ```
