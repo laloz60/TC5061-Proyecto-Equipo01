@@ -425,18 +425,58 @@ make check-all
 
 ## Despliegue de Modelos (API REST con Docker)
 
-Se empaquetaron los modelos de Regresión (P1), Clasificación (P2) y Clustering (P3) en una API REST con **FastAPI** y validación de datos mediante **Pydantic**. 
+El servicio expone los modelos de Regresión (P1), Clasificación (P2) y Clustering (P3) del proyecto mediante una API REST construida con **FastAPI** y validación de las entradas y las salidas con **Pydantic**. Los modelos **no se incluyen en la imagen**: a través de la variable `MLFLOW_TRACKING_URI` el contenedor se conecta al servidor local de MLflow, carga los modelos en memoria RAM al iniciar y los sirve con el alias `@champion`, de modo que siempre se entrega la última versión sin reconstruir la imagen OCI.
 
-**Inferencia dinámica:** El contenedor no lleva modelos pre-cargados. A través de la variable `MLFLOW_TRACKING_URI`, se conecta al servidor local de MLflow y carga en memoria RAM los modelos con alias `@champion`, asegurando servir siempre la última versión sin reconstruir la imagen OCI.
+### Requisitos
 
-### 1. Construir y ejecutar la API
-Gracias al `Makefile`, el proceso de despliegue está automatizado.
-Asegúrate de tener corriendo tu servidor de MLflow (ver [Experimentos](#experimentos-mlflow)). Luego, ejecuta:
+- Docker instalado y en ejecución (el `Dockerfile` es estándar OCI: funciona igual con Podman).
+- Servidor MLflow accesible desde el contenedor (ver [Conexión del contenedor con MLflow](#conexión-del-contenedor-con-mlflow)).
+- Modelos registrados en MLflow con el alias `@champion`.
+
+### Construir la imagen
+
+Desde la raíz del repositorio:
+
+```bash
+docker build -t mibici-api:latest .
+```
+
+O, con el target del `Makefile` (mismo resultado, automatizado):
 
 ```bash
 make docker-build   # Construye la imagen mibici-api:latest
-make docker-run     # Levanta el contenedor en el puerto 8000
 ```
+
+### Levantar el contenedor
+
+Primero levanta el servidor de MLflow (ver [Experimentos](#experimentos-mlflow) y [Conexión del contenedor con MLflow](#conexión-del-contenedor-con-mlflow)). Después:
+
+```bash
+docker run -d \
+  -p 8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  --name mibici-service \
+  mibici-api:latest
+```
+
+En Linux, agrega `--add-host` al comando (en Docker Desktop para macOS y Windows el hostname ya resuelve y el flag no estorba):
+
+```bash
+docker run -d \
+  --add-host=host.docker.internal:host-gateway \
+  -p 8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  --name mibici-service \
+  mibici-api:latest
+```
+
+Equivalente con el `Makefile` (contenedor llamado `mibici-api`, en primer plano):
+
+```bash
+make docker-run
+```
+
+La documentación interactiva de la API queda en [http://localhost:8000/docs](http://localhost:8000/docs) y el chequeo de estado responde en `http://localhost:8000/health`.
 
 ### Conexión del contenedor con MLflow
 
@@ -495,52 +535,9 @@ Elegimos la carga dinámica porque promover un modelo en el registry basta para 
 
 La evidencia de esta validación está en [`reports/api/evidencia_conexion_contenedor.md`](reports/api/evidencia_conexion_contenedor.md).
 
-## Despliegue de modelos (API REST con Docker)
-
-El servicio expone modelos de regresión (P1), clasificación (P2) y clustering (P3) mediante una API REST implementada con FastAPI y validación de datos con Pydantic. Los modelos no se incluyen en la imagen: el servicio los carga desde el Model Registry de MLflow al iniciar.
-
-### Requisitos
-
-- Docker instalado y en ejecución.
-- Servidor MLflow accesible desde el contenedor.
-- Modelos registrados en MLflow.
-
-### Construir la imagen
-
-Desde la raíz del repositorio:
-
-```bash
-docker build -t mibici-api:latest . 
-```
-Construye la imagen `mibici-api` con la etiqueta `latest` usando el `Dockerfile` de la raíz del repositorio.
-
-### Levantar el contenedor
-
-```bash
-docker run -d \
-  -p 8000:8000 \
-  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
-  --name mibici-service \
-  mibici-api:latest
-```
-
-En Linux, agrega `--add-host` al comando:
-
-```bash
-docker run -d \
-  --add-host=host.docker.internal:host-gateway \
-  -p 8000:8000 \
-  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
-  --name mibici-service \
-  mibici-api:latest
-```
-
-La documentación interactiva de la API está disponible en [http://localhost:8000/docs](http://localhost:8000/docs).
-
-
 ### Ejemplo de consumo de la API
 
-La salida de make `docker-test`:
+Salida de `make docker-test` contra el contenedor en marcha:
 ```bash
 == 1. Health check ==
 {"status":"healthy","modelos_cargados":["p1","p2","p3"]}   HTTP 200
