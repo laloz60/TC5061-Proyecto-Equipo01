@@ -389,7 +389,7 @@ python -m mibici.modeling.train p2 --model-name rf
 python -m mibici.modeling.train p3-search
 ```
 
-## Monitoreo, Drift y A/B Testing (Entregable 8)
+## Monitoreo, Drift y A/B Testing
 
 El proyecto incluye una capa de observabilidad para mantener los modelos vigentes mediante la detección de degradación de datos y la evaluación de nuevos candidatos.
 
