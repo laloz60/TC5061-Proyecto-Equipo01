@@ -161,5 +161,24 @@ def search(
     raise typer.Exit(code=_ejecutar(argv))
 
 
+@app.command("ab_test")
+def ab_test(
+    features_path: str = typer.Option(
+        "", "--features-path", help="Parquet de features (vacío = el del proyecto)."
+    ),
+) -> None:
+    """A/B testing P2: entrena la V2 y compara V1 vs V2 (mibici/modeling/ab_testing.py)."""
+    # ab_testing.py crea SUS DOS runs (entrenamiento y comparacion) dentro del
+    # experimento del equipo. El run padre que arma `mlflow run` no debe
+    # reutilizarse: mezclaria las metricas de los dos pasos y pisaria el tag
+    # stage_of_work='ab_candidate' de la V2.
+    os.environ.pop("MLFLOW_RUN_ID", None)
+    argv = ["mibici.modeling.ab_testing", "run"]
+    ruta = features_path.strip().strip('"')
+    if ruta:
+        argv += ["--features-path", ruta]
+    raise typer.Exit(code=_ejecutar(argv))
+
+
 if __name__ == "__main__":
     app()

@@ -64,3 +64,12 @@ entry_points:
 
   drift:
     command: python -m mibici.monitoring.drift
+
+  ab_test:
+    parameters:
+      features_path:
+        type: string
+        default: ""
+    command: >
+      python -m mibici.mlflow_entry ab_test
+      --features-path {features_path}
