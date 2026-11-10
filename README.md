@@ -389,6 +389,15 @@ python -m mibici.modeling.train p2 --model-name rf
 python -m mibici.modeling.train p3-search
 ```
 
+## Monitoreo, Drift y A/B Testing
+
+El proyecto incluye una capa de observabilidad para mantener los modelos vigentes mediante la detección de degradación de datos y la evaluación de nuevos candidatos.
+
+- **Generar Reporte de Data Drift (Evidently):**
+  Compara la distribución de los datos de entrenamiento (referencia) frente a los de producción (actuales).
+  ```bash
+  mlflow run . -e drift --env-manager=uv
+
 ## Buenas prácticas
 
 - **Métricas**: se nombran con el conjunto donde se calculan, `<split>_<métrica>` — `test_rmse`, `test_roc_auc`, `test_silhouette_score` (ver `mibici/modeling/train.py`).

@@ -61,3 +61,6 @@ entry_points:
 
   register:
     command: python -m mibici.modeling.register
+
+  drift:
+    command: python -m mibici.monitoring.drift
