@@ -2,6 +2,7 @@
 
 - Dorard, L. (2015). *Machine Learning Canvas*. OWNML. https://www.ownml.co/machine-learning-canvas
 - Drivendata. (s.f.). *Cookiecutter Data Science (CCDS): A logical, standard, flexible project structure for do-nothing data science*. https://cookiecutter-data-science.drivendata.org/
+- Evidently AI. (s.f.). Evidently documentation. Recuperado el 12 de noviembre de 2026, de https://docs.evidentlyai.com/introduction
 - Huyen, C. (2022). *Designing machine learning systems: An iterative process for production-ready applications*. O'Reilly Media.
 - Lakshmanan, V., Robinson, S., & Munn, M. (2020). *Machine learning design patterns: Solutions to common challenges in data preparation, model building, and MLOps*. O'Reilly Media.
 - MiBici. (s.f.). *Portal de Datos Abiertos de MiBici*. Sistema de Bicicleta Pública del Área Metropolitana de Guadalajara. https://mibici.net/es/datos-abiertos
