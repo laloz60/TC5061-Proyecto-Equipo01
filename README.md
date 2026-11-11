@@ -389,14 +389,17 @@ python -m mibici.modeling.train p2 --model-name rf
 python -m mibici.modeling.train p3-search
 ```
 
-## Monitoreo, Drift y A/B Testing
+## Monitoreo, Drift y A/B Testingout
 
 El proyecto incluye una capa de observabilidad para mantener los modelos vigentes mediante la detección de degradación de datos y la evaluación de nuevos candidatos.
 
-- **Generar Reporte de Data Drift (Evidently):**
-  Compara la distribución de los datos de entrenamiento (referencia) frente a los de producción (actuales).
+- **Generar Reporte de Data Drift y Calidad (Evidently):**
+  Compara la distribución y calidad de los datos basándose en dos periodos estrictamente separados para evitar fuga temporal y simular el entorno de producción:
+  - **Conjunto de Referencia (Train):** Mayo 2023 a Diciembre 2024. Periodo postpandemia estabilizado con el que el modelo original aprendió las distribuciones de movilidad base.
+  - **Conjunto Actual (Test/Producción):** Enero 2025 a Septiembre 2026. Periodo inédito para el modelo que aisla el impacto de las nuevas dinámicas urbanas y el desplazamiento operativo a lo largo del tiempo.
   ```bash
   mlflow run . -e drift --env-manager=uv
+  ```
 
 ## Buenas prácticas
 
