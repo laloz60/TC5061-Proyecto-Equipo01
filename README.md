@@ -389,17 +389,36 @@ python -m mibici.modeling.train p2 --model-name rf
 python -m mibici.modeling.train p3-search
 ```
 
-## Monitoreo, Drift y A/B Testingout
+## Monitoreo, Drift y A/B Testing (Actividad 9)
 
-El proyecto incluye una capa de observabilidad para mantener los modelos vigentes mediante la detección de degradación de datos y la evaluación de nuevos candidatos.
+El proyecto incluye una capa de observabilidad para mantener vigentes los modelos: detecta cambios en los datos y evalúa nuevas versiones antes de promoverlas. El resultado integrado (drift, A/B y recomendación de Continuous Training) está en [`reports/reporte_actividad9.md`](reports/reporte_actividad9.md).
 
-- **Generar Reporte de Data Drift y Calidad (Evidently):**
-  Compara la distribución y calidad de los datos basándose en dos periodos estrictamente separados para evitar fuga temporal y simular el entorno de producción:
-  - **Conjunto de Referencia (Train):** Mayo 2023 a Diciembre 2024. Periodo postpandemia estabilizado con el que el modelo original aprendió las distribuciones de movilidad base.
-  - **Conjunto Actual (Test/Producción):** Enero 2025 a Septiembre 2026. Periodo inédito para el modelo que aisla el impacto de las nuevas dinámicas urbanas y el desplazamiento operativo a lo largo del tiempo.
-  ```bash
-  mlflow run . -e drift --env-manager=uv
-  ```
+### 1. Reporte de Data Drift y Calidad (Evidently)
+
+Compara la distribución y la calidad de los datos en dos periodos separados por fecha, para evitar fuga temporal y simular el entorno de producción:
+
+- **Conjunto de Referencia (Train):** mayo 2023 a diciembre 2024. Es la ventana con la que se entrenaron los modelos vigentes (`config.TRAIN_END`), en un periodo postpandemia ya estabilizado.
+- **Conjunto Actual (Test/Producción):** enero 2025 a septiembre 2026. Periodo que el modelo no vio; muestra cómo cambian la movilidad y la operación de la red con el tiempo.
+
+De cada periodo se toman 30,000 filas con `config.SEED` para que el reporte quepa en memoria y sea reproducible.
+
+```bash
+mlflow run . -e drift --env-manager=uv
+```
+
+Salida: `reports/drift_report.html` (reporte interactivo) y `reports/drift_report.json` (métricas por variable).
+
+### 2. A/B Testing del modelo P2 (Riesgo)
+
+Compara la versión vigente del modelo (`@champion`) contra una V2 reentrenada con la ventana extendida 2023-05 a 2025-06, registrada como nueva versión del mismo modelo con el alias `@ab-candidate`. El alias `champion` no se mueve.
+
+Las dos versiones se evalúan sobre **el mismo conjunto**: el split `test` (2025-07 a 2026-09), con las mismas features, la misma etiqueta y la misma semilla. Se reportan ROC AUC, average precision, precisión, recall y F1 macro, y la diferencia se prueba con el test exacto de McNemar.
+
+```bash
+mlflow run . -e ab_test --env-manager=uv
+```
+
+El entry point entrena y registra la V2, y después compara las dos versiones (`python -m mibici.modeling.ab_testing run`). Requiere el servidor de MLflow levantado y la V1 registrada con el alias `@champion`. Salida: `reports/ab_testing_p2.md`, `reports/ab_testing_p2.csv` y las gráficas en `reports/figures/ab_testing_p2/`.
 
 ## Buenas prácticas
 
