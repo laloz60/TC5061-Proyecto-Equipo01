@@ -157,7 +157,7 @@ El test exacto de McNemar obtuvo `p < 0.0001`, lo que indica diferencias estadí
 
 **Insumos que cruza la recomendación:**
 
-- **Drift:** el 19 % de las variables tiene drift, sin drift a nivel dataset. El cambio de `mes` es en buena parte un efecto de las ventanas elegidas. “Las otras variables con drift detectado son `estacion_id`, `salidas_media_7d` y `neto_media_7d`.
+- **Drift:** el 19 % de las variables tiene drift, sin drift a nivel dataset. El cambio de `mes` es en buena parte un efecto de las ventanas elegidas. Las otras variables con drift detectado son `estacion_id`, `salidas_media_7d` y `neto_media_7d`.
 - **A/B:** reentrenar con datos más recientes no mejora el ranking (ΔROC AUC +0.0008). La ganancia práctica sale de recalibrar el umbral.
 
 ### 3.4 Veredicto y justificación de negocio
