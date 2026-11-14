@@ -42,7 +42,7 @@ De cada conjunto se toma una muestra de 30,000 filas con `config.SEED = 42` para
 | `salidas_media_7d` | **0.118** | Mismo fenómeno estructural: la reconfiguración de la red afecta los promedios semanales. |
 
 **Señal Operativa Clave (Anomalía de Volumen):** 
-Aunque los tests de distribución normalizan las curvas, a nivel operativo el volumen total rompió la banda histórica (315420k/mes). Septiembre registró 490k viajes (+25% vs agosto) y **octubre disparó a 635,532 viajes (+30% vs septiembre, +51% vs octubre 2025)**.
+Aunque los tests de distribución normalizan las curvas, a nivel operativo el volumen total rompió la banda histórica (315–420k/mes). Septiembre registró 490k viajes (+25% vs agosto) y **octubre disparó a 635,532 viajes (+30% vs septiembre, +51% vs octubre 2025)**.
 
 Las demás 17 variables quedan por debajo de 0.1. Las más altas son `salidas_prom_4sem` (0.078) y `salidas_lag_1h` (0.070). Las variables de hora y día (`hora_del_dia` 0.014, `dia_semana` 0.006, `es_fin_de_semana` 0.002) prácticamente no cambian: el patrón diario y semanal de uso es estable.
 

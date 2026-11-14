@@ -18,8 +18,8 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 
 ## Datos
 
-- **Fuente:** [datos abiertos de MiBici](https://mibici.net/es/datos-abiertos)  CSVs mensuales de viajes + nomenclatura de estaciones.
-- **Cobertura:** 2023-05 a 2026-10 (**42 meses**, corte postpandemia decidido por el equipo: fin de la emergencia sanitaria COVID-19, mayo 2023)  **16,011,659 viajes** y **470 estaciones**.
+- **Fuente:** [datos abiertos de MiBici](https://mibici.net/es/datos-abiertos) — CSVs mensuales de viajes + nomenclatura de estaciones.
+- **Cobertura:** 2023-05 a 2026-10 (**42 meses**, corte postpandemia decidido por el equipo: fin de la emergencia sanitaria COVID-19, mayo 2023) → **16,011,659 viajes** y **470 estaciones**.
 - **Lo que se versiona en Git:** solo `data/manifest.json` (hash SHA-256 de cada CSV, del Parquet unificado y de la nomenclatura). Los CSVs (~1.2 GB) y el Parquet (~330 MB) **no se suben al repositorio**; se regeneran con la ingesta y el manifiesto garantiza que sean idénticos.
 - **Partición temporal sin fuga** (definida en `mibici/config.py`, nunca se mezclan meses futuros con el entrenamiento):
 
