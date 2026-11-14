@@ -18,16 +18,16 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 
 ## Datos
 
-- **Fuente:** [datos abiertos de MiBici](https://mibici.net/es/datos-abiertos) — CSVs mensuales de viajes + nomenclatura de estaciones.
-- **Cobertura:** 2023-05 a 2026-09 (**41 meses**, corte postpandemia decidido por el equipo: fin de la emergencia sanitaria COVID-19, mayo 2023) → **15,376,127 viajes** y **484 estaciones**.
-- **Lo que se versiona en Git:** solo `data/manifest.json` (hash SHA-256 de cada CSV, del Parquet unificado y de la nomenclatura). Los CSVs (~1.2 GB) y el Parquet (321 MB) **no se suben al repositorio**; se regeneran con la ingesta y el manifiesto garantiza que sean idénticos.
+- **Fuente:** [datos abiertos de MiBici](https://mibici.net/es/datos-abiertos)  CSVs mensuales de viajes + nomenclatura de estaciones.
+- **Cobertura:** 2023-05 a 2026-10 (**42 meses**, corte postpandemia decidido por el equipo: fin de la emergencia sanitaria COVID-19, mayo 2023)  **16,011,659 viajes** y **470 estaciones**.
+- **Lo que se versiona en Git:** solo `data/manifest.json` (hash SHA-256 de cada CSV, del Parquet unificado y de la nomenclatura). Los CSVs (~1.2 GB) y el Parquet (~330 MB) **no se suben al repositorio**; se regeneran con la ingesta y el manifiesto garantiza que sean idénticos.
 - **Partición temporal sin fuga** (definida en `mibici/config.py`, nunca se mezclan meses futuros con el entrenamiento):
 
 | Split  | Rango |
 |--------|-------|
 | train  | 2023-05 .. 2024-12 |
 | val    | 2025-01 .. 2025-06 |
-| test   | 2025-07 .. 2026-09 |
+| test   | 2025-07 .. 2026-10 |
 
 ## Requisitos
 
@@ -67,8 +67,8 @@ python -m mibici.dataset
 Salidas:
 
 ```
-data/raw/mibici_viajes_2023_05_a_2026_09.parquet   # Parquet unificado (no versionado)
-data/raw/nomenclatura_estaciones.parquet           # 484 estaciones: capacidad, lat/lon
+data/raw/mibici_viajes_2023_05_a_2026_10.parquet   # Parquet unificado (no versionado)
+data/raw/nomenclatura_estaciones.parquet           # 470 estaciones: capacidad, lat/lon
 data/manifest.json                                 # versionado: totales + SHA-256
 ```
 
@@ -398,7 +398,7 @@ El proyecto incluye una capa de observabilidad para mantener vigentes los modelo
 Compara la distribución y la calidad de los datos en dos periodos separados por fecha, para evitar fuga temporal y simular el entorno de producción:
 
 - **Conjunto de Referencia (Train):** mayo 2023 a diciembre 2024. Es la ventana con la que se entrenaron los modelos vigentes (`config.TRAIN_END`), en un periodo postpandemia ya estabilizado.
-- **Conjunto Actual (Test/Producción):** enero 2025 a septiembre 2026. Periodo que el modelo no vio; muestra cómo cambian la movilidad y la operación de la red con el tiempo.
+- **Conjunto Actual (Test/Producción):** enero 2025 a octubre 2026. Periodo que el modelo no vio; muestra cómo cambian la movilidad y la operación de la red con el tiempo.
 
 De cada periodo se toman 30,000 filas con `config.SEED` para que el reporte quepa en memoria y sea reproducible.
 
