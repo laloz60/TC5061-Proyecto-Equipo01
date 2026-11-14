@@ -6,9 +6,9 @@
 
 | # | Capa | Implementación | Entrada → Salida |
 |---|---|---|---|
-| 1 | Fuente de datos | Portal de datos abiertos de MiBici | 41 CSV mensuales de viajes (2023-05 .. 2026-09) + `nomenclatura_2026_09.csv` |
+| 1 | Fuente de datos | Portal de datos abiertos de MiBici | 42 CSV mensuales de viajes (2023-05 .. 2026-10) + `nomenclatura_2026_10.csv` |
 | 2 | Ingesta | `mibici/dataset.py` | CSV → descarga, normalización de columnas, encoding y fechas → Parquet unificado + `data/manifest.json` |
-| 3 | Almacenamiento | `data/raw/` | `mibici_viajes_2023_05_a_2026_09.parquet` (15,376,127 viajes) y `nomenclatura_estaciones.parquet` (484 estaciones) |
+| 3 | Almacenamiento | `data/raw/` | `mibici_viajes_2023_05_a_2026_10.parquet` (16,011,659 viajes) y `nomenclatura_estaciones.parquet` (470 estaciones) |
 | 4 | Procesamiento | `mibici/features.py` | Viajes → tabla estación × hora con calendario, lags, medias, capacidad y split → `data/processed/features_estacion_hora.parquet` |
 | 5 | Entrenamiento | `mibici/modeling/train.py` | Features / perfiles horarios → modelos P1 (regresión), P2 (clasificación) y P3 (clustering) |
 | 6 | Registro | MLflow Tracking, experimento `mibici-equipo01` | Runs con params, tags, métricas y artefactos |
@@ -19,6 +19,7 @@ Componentes de soporte:
 - **Versionado** (Git / GitHub): código y `data/manifest.json`. Los CSV (~1.2 GB) y el Parquet no se suben; se regeneran con `python -m mibici.dataset` y se verifican contra los hashes del manifiesto.
 - **Pruebas** (`tests/`, pytest): validan la ingesta, el manifiesto y que las features no usen información futura.
 - **Salidas** (`models/`, `reports/figures/`): modelos serializados con joblib e inferencia batch con `mibici/modeling/predict.py`.
+- **Nomenclatura (Drift Estructural):** La nomenclatura fluye desde la Ingesta → Features → Modelos. Un cambio en la red (como la reducción a 470 estaciones en octubre 2026) afecta tanto a los datos como a los modelos. Las estaciones retiradas quedan con métricas en `NaN` en las features (P1 las descarta por dropna), y en modelos de clustering (P3), los IDs de clúster se recorren al cambiar el orden/tamaño de la matriz.
 
 Estado actual: en `train.py` está implementado P3 (K-Means); P1 y P2 están en desarrollo. P3 calcula sus perfiles horarios directamente desde el Parquet de `data/raw/`, sin pasar por `features.py`.
 

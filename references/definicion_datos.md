@@ -8,7 +8,7 @@
   El `asset_id` cambia cada mes y no es secuencial, por eso el catálogo completo
   está fijo en `mibici/dataset.py` (`_ASSET_IDS`).
 - **Nomenclatura de estaciones:**
-  https://mibici.net/site/assets/files/1118/nomenclatura_2026_09.csv
+  https://mibici.net/site/assets/files/1118/nomenclatura_2026_10.csv
 - La URL exacta y el hash SHA-256 de cada archivo descargado están en
   `data/manifest.json`.
 
@@ -20,11 +20,11 @@ los patrones reflejen la operación actual del sistema.
 
 | Concepto | Valor |
 |---|---|
-| Periodo | 2023-05 a 2026-09 |
-| Archivos mensuales | 41 |
-| Viajes | 15,376,127 |
-| Estaciones (nomenclatura) | 484 |
-| Parquet unificado | `data/raw/mibici_viajes_2023_05_a_2026_09.parquet` (~339 MB) |
+| Periodo | 2023-05 a 2026-10 |
+| Archivos mensuales | 42 |
+| Viajes | 16,011,659 |
+| Estaciones (nomenclatura) | 470 |
+| Parquet unificado | `data/raw/mibici_viajes_2023_05_a_2026_10.parquet` (~340 MB) |
 
 Para reproducirlo: `python -m mibici.dataset`. El hash del Parquet en
 `data/manifest.json` permite verificar que se obtuvieron exactamente los mismos datos.
@@ -52,6 +52,8 @@ Para reproducirlo: `python -m mibici.dataset`. El hash del Parquet en
 | name | `nombre` | Nombre de la estación |
 | latitude / longitude | `latitud` / `longitud` | Ubicación |
 | dpcapacity | `capacidad` | Número de anclajes |
+
+*Nota:* La nomenclatura es un **archivo versionado por fecha**, no un catálogo estático. La red sufre contracciones (ej. baja de 14 estaciones y cambio de 11 capacidades en octubre 2026). El cruce de datos siempre debe respetar la versión temporal del catálogo.
 
 ### 3.3 Problemas de calidad resueltos en la ingesta
 
@@ -141,7 +143,7 @@ Definida en `mibici/config.py` y aplicada en `features.assign_split`:
 |---|---|---|
 | Train | 2023-05 .. 2024-12 | 20 |
 | Validación | 2025-01 .. 2025-06 | 6 |
-| Prueba | 2025-07 .. 2026-09 | 15 |
+| Prueba | 2025-07 .. 2026-10 | 16 |
 
 - La partición es por fecha, nunca aleatoria: el modelo no ve el futuro.
 - Todas las features históricas (lags de 1h, 24h y 168h, media móvil de 7 días,
