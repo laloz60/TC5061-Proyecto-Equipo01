@@ -20,7 +20,7 @@ Los dos conjuntos salen de `data/processed/features_estacion_hora.parquet` y se 
 | Conjunto | Periodo | Por qué |
 |---|---|---|
 | Referencia | 2023-05-01 a 2024-12-31 | Es la ventana con la que se entrenaron los modelos vigentes (`config.TRAIN_END`). Representa lo que el modelo "conoce". |
-| Actual | 2025-01-01 a 2026-09-30 | Periodo posterior que el modelo no vio al entrenar. Simula los datos que llegan en producción. |
+| Actual | 2025-01-01 a 2026-10-31 | Periodo posterior que el modelo no vio al entrenar. Simula los datos que llegan en producción. |
 
 De cada conjunto se toma una muestra de 30,000 filas con `config.SEED = 42` para que el reporte quepa en memoria y sea reproducible. Evidently usa la distancia de Wasserstein normalizada en las variables numéricas y la distancia de Jensen-Shannon en `es_fin_de_semana`. El umbral es 0.1 por variable, y el dataset se marca con drift si al menos el 50 % de las columnas lo tiene.
 
@@ -36,10 +36,13 @@ De cada conjunto se toma una muestra de 30,000 filas con `config.SEED = 42` para
 
 | Variable | Distancia (Wasserstein normalizada) | Lectura |
 |---|---:|---|
-| `mes` | **0.4157** | Se debe sobre todo a las ventanas elegidas. La referencia cubre mayo a diciembre dos veces (2023 y 2024) y enero a abril una vez; la actual cubre enero a septiembre dos veces y octubre a diciembre una vez. Gran parte del drift es de calendario, no un cambio de comportamiento. |
-| `estacion_id` | **0.2367** | Cambió la mezcla de estaciones que aparecen en la muestra: altas y bajas de estaciones y redistribución del uso dentro de la red. |
-| `salidas_media_7d` | **0.1379** | El nivel de demanda semanal por estación se movió. Es la variable de mayor peso para predecir demanda (P1) y riesgo (P2). |
-| `neto_media_7d` | **0.1288** | Cambió el balance semanal llegadas − salidas por estación, que es la base de la etiqueta de riesgo de P2. |
+| `mes` | **0.337** | Artefacto de calendario: la referencia cubre 20 meses (con 2 octubres) vs 22 del actual (solo un octubre). No es drift real de comportamiento. |
+| `estacion_id` | **0.255** | **Drift estructural real:** la nomenclatura pasó de 484 a 470 estaciones (14 dadas de baja) y 11 capacidades cambiaron drásticamente. |
+| `neto_media_7d` | **0.133** | Media móvil semanal del saldo neto desplazada. La expansión/contracción de la red agrega horas con saldo en 0. |
+| `salidas_media_7d` | **0.118** | Mismo fenómeno estructural: la reconfiguración de la red afecta los promedios semanales. |
+
+**Señal Operativa Clave (Anomalía de Volumen):** 
+Aunque los tests de distribución normalizan las curvas, a nivel operativo el volumen total rompió la banda histórica (315420k/mes). Septiembre registró 490k viajes (+25% vs agosto) y **octubre disparó a 635,532 viajes (+30% vs septiembre, +51% vs octubre 2025)**.
 
 Las demás 17 variables quedan por debajo de 0.1. Las más altas son `salidas_prom_4sem` (0.078) y `salidas_lag_1h` (0.070). Las variables de hora y día (`hora_del_dia` 0.014, `dia_semana` 0.006, `es_fin_de_semana` 0.002) prácticamente no cambian: el patrón diario y semanal de uso es estable.
 
@@ -123,16 +126,16 @@ De las 21 variables monitoreadas mediante Evidently, cuatro (19.05 %) superaron 
 
 | Variable | Distancia de Wasserstein | Umbral | Implicación para P1 y P2 |
 |---|---:|---:|---|
-| `mes` | **0.4157** | 0.10 | Presenta el mayor desplazamiento. Puede estar relacionado con las diferencias en la cobertura temporal de ambos periodos. Es una variable categórica de calendario utilizada en los modelos, por lo que conviene revisar su distribución mensual y considerar su naturaleza cíclica. |
-| `estacion_id` | **0.2367** | 0.10 | Cambió la distribución de identificadores: 369 valores únicos en referencia frente a 473 en el periodo actual. Es importante para segmentar los registros por estación y construir las variables históricas, aunque no forma parte directamente del conjunto de predictores de P1 y P2. |
-| `salidas_media_7d` | **0.1379** | 0.10 | Refleja cambios en el promedio móvil de salidas de los últimos siete días. Es una variable utilizada por ambos modelos y su desplazamiento puede afectar las predicciones de demanda de P1 y las estimaciones de riesgo de P2. |
-| `neto_media_7d` | **0.1288** | 0.10 | Representa el promedio móvil del saldo neto de viajes. Su cambio puede modificar la información histórica utilizada por P1 y P2. En P2 resulta relevante porque el modelo estima riesgos de vaciado o saturación utilizando variables históricas, aunque su etiqueta se construye a partir del saldo neto futuro. |
+| `mes` | **0.337** | 0.10 | Presenta el mayor desplazamiento. Puede estar relacionado con las diferencias en la cobertura temporal de ambos periodos. Es una variable categórica de calendario utilizada en los modelos, por lo que conviene revisar su distribución mensual y considerar su naturaleza cíclica. |
+| `estacion_id` | **0.255** | 0.10 | Cambió la distribución de identificadores: 369 valores únicos en referencia frente a 473 en el periodo actual. Es importante para segmentar los registros por estación y construir las variables históricas, aunque no forma parte directamente del conjunto de predictores de P1 y P2. |
+| `salidas_media_7d` | **0.118** | 0.10 | Refleja cambios en el promedio móvil de salidas de los últimos siete días. Es una variable utilizada por ambos modelos y su desplazamiento puede afectar las predicciones de demanda de P1 y las estimaciones de riesgo de P2. |
+| `neto_media_7d` | **0.113** | 0.10 | Representa el promedio móvil del saldo neto de viajes. Su cambio puede modificar la información histórica utilizada por P1 y P2. En P2 resulta relevante porque el modelo estima riesgos de vaciado o saturación utilizando variables históricas, aunque su etiqueta se construye a partir del saldo neto futuro. |
 
 ### 3.2 Interpretación estadística del desplazamiento
 
 - **Ausencia de drift global:** Evidently identifica cuatro variables con drift de un total de 21 (19.05 %). El resultado global es `dataset_drift = false`, debido a que no se alcanza el umbral configurado del 50 % de variables afectadas.
 
-- **Cambios temporales:** `mes` presenta una distancia de 0.4157, considerablemente superior al resto de las variables. Parte de esta diferencia puede relacionarse con la composición temporal de los conjuntos de referencia y actual. Por ello, es necesario considerar la distribución de los meses antes de atribuir el resultado a un cambio estructural en la demanda.
+- **Cambios temporales:** `mes` presenta una distancia de 0.337, considerablemente superior al resto de las variables. Parte de esta diferencia puede relacionarse con la composición temporal de los conjuntos de referencia y actual. Por ello, es necesario considerar la distribución de los meses antes de atribuir el resultado a un cambio estructural en la demanda.
 
 - **Cambios en la red y movilidad:** el desplazamiento de `estacion_id` indica diferencias en la composición de los identificadores observados. Por otro lado, los cambios en `salidas_media_7d` y `neto_media_7d` sugieren variaciones en los patrones recientes de movilidad.
 
