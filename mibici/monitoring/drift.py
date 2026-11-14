@@ -17,11 +17,11 @@ def generate_drift_report():
     df = pd.read_parquet(config.PROCESSED_DATA_DIR / "features_estacion_hora.parquet")
     # Definición explícita de los periodos de monitoreo.
     # Referencia: 2023-05-01 a 2024-12-31.
-    # Actual: 2025-01-01 a 2026-09-30.
+    # Actual: 2025-01-01 a 2026-10-31.
     reference_start = pd.Timestamp("2023-05-01")
     train_end = pd.Timestamp(config.TRAIN_END)
     current_start = pd.Timestamp("2025-01-01")
-    current_end = pd.Timestamp("2026-09-30 23:59:59")
+    current_end = pd.Timestamp("2026-10-31 23:59:59")
 
     logger.info(f"Periodo de referencia: {reference_start.date()} a {train_end.date()}")
     logger.info(f"Periodo actual: {current_start.date()} a {current_end.date()}")
@@ -47,7 +47,7 @@ def generate_drift_report():
         )
 
     if current_df.empty:
-        raise ValueError("El conjunto actual está vacío. Verifica el periodo 2025-01 a 2026-09.")
+        raise ValueError("El conjunto actual está vacío. Verifica el periodo 2025-01 a 2026-10.")
 
     # Eliminar columnas temporales y de partición.
     # No son variables que deban utilizarse en el análisis estadístico.

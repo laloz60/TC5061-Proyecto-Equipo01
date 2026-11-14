@@ -1,7 +1,7 @@
 """Ingesta reproducible de los datos abiertos de MiBici.
 
-Descarga el histórico postpandemia de viajes (mayo 2023 – septiembre 2026,
-41 archivos mensuales; ver `DATA_START` en config.py) y la nomenclatura de
+Descarga el histórico postpandemia de viajes (mayo 2023 – octubre 2026,
+42 archivos mensuales; ver `DATA_START` en config.py) y la nomenclatura de
 estaciones desde el portal de datos abiertos de MiBici, normaliza esquemas y
 codificación, y escribe un único archivo Parquet unificado más un manifiesto
 versionable (SHA-256 por archivo) que permite reconstruir exactamente los
@@ -197,6 +197,7 @@ _ASSET_IDS: dict[tuple[int, int], int] = {
     (2026, 7): 129006,
     (2026, 8): 130362,
     (2026, 9): 131825,
+    (2026, 10): 133188,
 }
 
 # Nombres de archivo que se apartan del patrón datos_abiertos_AAAA_MM.csv
@@ -205,8 +206,8 @@ _NON_STANDARD_NAMES: dict[tuple[int, int], str] = {
     (2017, 4): "datos_abiertos_2017_04-1.csv",
 }
 
-# Nomenclatura de estaciones (archivo vigente a septiembre de 2026)
-_NOMENCLATURA_URL = f"{_BASE}/1118/nomenclatura_2026_09.csv"
+# Nomenclatura de estaciones (archivo vigente a octubre de 2026)
+_NOMENCLATURA_URL = f"{_BASE}/1118/nomenclatura_2026_10.csv"
 
 # Esquema canónico de columnas (verificado en archivos de 2014 a 2026).
 # Entre años cambian comillas, encoding (UTF-8 vs latin-1) e incluso el

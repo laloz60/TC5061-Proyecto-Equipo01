@@ -14,7 +14,7 @@ def test_fechas_de_config():
     assert params["train_start"] == "2023-05-01"
     assert params["val_start"] == "2025-01-01"
     assert params["test_start"] == "2025-07-01"
-    assert params["test_end"] == "2026-09-30"
+    assert params["test_end"] == "2026-10-31"
 
 
 def test_hash_del_parquet(tmp_path, monkeypatch):

@@ -1,7 +1,7 @@
 """A/B testing del modelo P2 (Riesgo): V1 (@champion) vs V2 (issue #138).
 
 Compara dos versiones del clasificador de riesgo sobre EXACTAMENTE el mismo
-conjunto de evaluacion: el split ``test`` (2025-07-01..2026-09-30), con las
+conjunto de evaluacion: el split ``test`` (2025-07-01..2026-10-31), con las
 mismas features, la misma etiqueta y la misma semilla (``config.SEED``). La
 unica diferencia entre los dos brazos es el modelo y su umbral, de modo que la
 diferencia de metricas es atribuible a la V2 y no a los datos.

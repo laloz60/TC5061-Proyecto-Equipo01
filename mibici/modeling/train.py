@@ -128,7 +128,7 @@ class KMeansClusterTrainer(BaseTrainer):
         """Carga la nomenclatura y calcula perfiles horarios POR VENTANA (train/val/test).
 
         El split temporal es el de config.py: train 2023-05..2024-12,
-        val 2025-01..2025-06, test 2025-07..2026-09. Así el KMeans se ajusta
+        val 2025-01..2025-06, test 2025-07..2026-10. Así el KMeans se ajusta
         en train y la selección se evalúa en val, sin mirar test.
         """
         logger.info(f"Cargando datos espaciales desde: {input_path}")
@@ -766,7 +766,7 @@ def train_p2(
     La etiqueta es el proxy de riesgo de features.add_risk_label
     (ver references/proxy_riesgo_p2.md). Se usa el split temporal de config.py:
     se entrena con train (2023-05..2024-12), se valida con val (2025-01..2025-06)
-    y se evalua con test (2025-07..2026-09).
+    y se evalua con test (2025-07..2026-10).
     """
     from mibici.config import MANIFEST_PATH
     from mibici.features import add_risk_label
