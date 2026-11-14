@@ -25,9 +25,9 @@ def test_catalog_cover_post_pandemic_history():
         start=(DATA_START.year, DATA_START.month),
         end=(DATA_END.year, DATA_END.month),
     )
-    assert len(entries) == 41
+    assert len(entries) == 42
     assert entries[0].label == "2023-05"
-    assert entries[-1].label == "2026-09"
+    assert entries[-1].label == "2026-10"
 
 
 def test_normalize_columns_canonical_schema():
@@ -84,12 +84,12 @@ def test_manifest_is_versioned_and_complete():
         pytest.skip("ingesta no ejecutada todavía")
 
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-    assert manifest["n_months"] == 41
+    assert manifest["n_months"] == 42
     assert manifest["first_month"] == "2023-05"
-    assert manifest["last_month"] == "2026-09"
+    assert manifest["last_month"] == "2026-10"
     assert manifest["total_rows"] > 0
     assert manifest["total_rows"] == manifest["unified_parquet"]["rows"]
-    assert len(manifest["files"]) == 41
+    assert len(manifest["files"]) == 42
     assert all(len(f["sha256"]) == 64 for f in manifest["files"])
     assert len(manifest["unified_parquet"]["sha256"]) == 64
 
