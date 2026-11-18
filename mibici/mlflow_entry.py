@@ -19,7 +19,7 @@ EXPERIMENT_NAME = "mibici-equipo01"
 # pregunta -> comando de búsqueda con nested runs en train.py y opción de su malla
 _BUSQUEDAS = {
     "p1": ("p1-search", "--n-estimators-list"),  # Random Forest: n_estimators
-    "p3": ("p3-search", "--n-clusters-list"),    # K-Means++: K
+    "p3": ("p3-search", "--n-clusters-list"),  # K-Means++: K
 }
 
 # pregunta -> (modelo baseline, modelos admitidos)
@@ -93,7 +93,9 @@ def train(
     question: str = typer.Option("p1", "--question", help="Pregunta: p1 | p2 | p3."),
     model: str = typer.Option("", "--model", help="Variante del modelo (vacío = baseline)."),
     n_estimators: int = typer.Option(100, "--n-estimators", help="P1 (rf): árboles del bosque."),
-    rf_max_samples: int = typer.Option(500_000, "--rf-max-samples", help="P1 (rf): filas por árbol."),
+    rf_max_samples: int = typer.Option(
+        500_000, "--rf-max-samples", help="P1 (rf): filas por árbol."
+    ),
     n_clusters: int = typer.Option(5, "--n-clusters", help="P3: número de clústeres K."),
     n_init: int = typer.Option(1, "--n-init", help="P3: inicios de k-means."),
 ) -> None:
@@ -112,19 +114,27 @@ def train(
 
     if q == "p1":
         argv = [
-            "mibici.modeling.train", "p1",
-            "--model", modelo,
-            "--n-estimators", str(n_estimators),
-            "--rf-max-samples", str(rf_max_samples),
+            "mibici.modeling.train",
+            "p1",
+            "--model",
+            modelo,
+            "--n-estimators",
+            str(n_estimators),
+            "--rf-max-samples",
+            str(rf_max_samples),
         ]
     elif q == "p2":
         argv = ["mibici.modeling.train", "p2", "--model-name", modelo]
     else:
         argv = [
-            "mibici.modeling.train", "p3",
-            "--init-method", modelo,
-            "--n-clusters", str(n_clusters),
-            "--n-init", str(n_init),
+            "mibici.modeling.train",
+            "p3",
+            "--init-method",
+            modelo,
+            "--n-clusters",
+            str(n_clusters),
+            "--n-init",
+            str(n_init),
         ]
 
     raise typer.Exit(code=_ejecutar(argv))
@@ -134,7 +144,8 @@ def train(
 def search(
     question: str = typer.Option("p1", "--question", help="Pregunta: p1 | p2 | p3."),
     grid: str = typer.Option(
-        "auto", "--grid",
+        "auto",
+        "--grid",
         help="Valores separados por comas (p1: n_estimators, p3: K). 'auto' = malla de train.py.",
     ),
 ) -> None:

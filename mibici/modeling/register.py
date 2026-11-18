@@ -48,7 +48,9 @@ def _mejor_run_con_modelo(cliente: MlflowClient, pregunta: str, metrica: str, or
     # registra), se busca entre todas las corridas previas de la pregunta
     filtros = [f"{base} AND tags.stage_of_work = 'candidate'", base]
     for filtro in filtros:
-        runs = cliente.search_runs([experimento.experiment_id], filter_string=filtro, order_by=ordenado)
+        runs = cliente.search_runs(
+            [experimento.experiment_id], filter_string=filtro, order_by=ordenado
+        )
         for run in runs:
             if _run_tiene_modelo(cliente, run.info.run_id, logueados):
                 return run
@@ -97,7 +99,9 @@ def _registrar(pregunta: str) -> None:
 
 @app.command()
 def main(
-    question: str = typer.Option("all", "--question", help="Pregunta a registrar: p1 | p2 | p3 | all."),
+    question: str = typer.Option(
+        "all", "--question", help="Pregunta a registrar: p1 | p2 | p3 | all."
+    ),
 ) -> None:
     """Registra el mejor candidato de cada pregunta (o solo la indicada)."""
     q = question.strip().lower()
