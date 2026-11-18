@@ -1,8 +1,10 @@
-"""Carga de modelos desde el Model Registry para el contenedor (Actividad 8).
+"""Carga de modelos desde el Model Registry para el contenedor (Actividad 8 y 10).
 
 Flujo robusto para el contenedor:
-1. Intenta ``models:/<nombre>@champion`` (funciona en el host).
-2. Si falla (dentro del contenedor el artifact_uri guardado es una ruta
+1. Si ``MIBICI_MOCK_REGISTRY=1`` (entorno CI smoke test), devuelve un modelo
+   ligero determinista que respeta la interfaz PyFunc y sklearn_model.
+2. Intenta ``models:/<nombre>@champion`` (funciona en el host).
+3. Si falla (dentro del contenedor el artifact_uri guardado es una ruta
    local absoluta del host), resuelve el alias, obtiene el id del logged
    model y reconstruye la URI como ``mlflow-artifacts:/`` para descargar
    los artefactos a traves del proxy del servidor MLflow.
@@ -10,9 +12,12 @@ Flujo robusto para el contenedor:
 
 from __future__ import annotations
 
+import os
+
 from loguru import logger
 import mlflow
 import mlflow.pyfunc
+import numpy as np
 
 _ALIASES = {
     "p1": "mibici-equipo01-p1-demanda",
@@ -21,8 +26,41 @@ _ALIASES = {
 }
 
 
+class _MockSklearnModel:
+    """Simula el estimador subyacente de scikit-learn para P2 en CI."""
+
+    def predict_proba(self, df):
+        return np.array([[0.25, 0.75]], dtype="float32")
+
+
+class _MockModelImpl:
+    """Simula el atributo ``_model_impl`` de MLflow PyFunc."""
+
+    def __init__(self) -> None:
+        self.sklearn_model = _MockSklearnModel()
+
+
+class _MockPyFuncModel:
+    """Modelo mock determinista para validar contratos de la API en CI (issue #159)."""
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+        self._model_impl = _MockModelImpl()
+
+    def predict(self, data):
+        if self.key == "p1":
+            return np.array([5.62], dtype="float32")
+        if self.key == "p2":
+            return np.array([1], dtype="int32")
+        return np.array([2], dtype="int32")
+
+
 def load_champion(key: str) -> mlflow.pyfunc.PyFuncModel:
     """Carga el modelo ``@champion`` de la pregunta indicada (p1, p2 o p3)."""
+    if os.getenv("MIBICI_MOCK_REGISTRY", "0") == "1":
+        logger.warning(f"{key}: usando modelo mock para smoke test en CI (MIBICI_MOCK_REGISTRY=1)")
+        return _MockPyFuncModel(key)  # type: ignore[return-value]
+
     name = _ALIASES[key]
     model_uri = f"models:/{name}@champion"
     try:
