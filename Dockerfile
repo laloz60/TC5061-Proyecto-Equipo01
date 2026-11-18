@@ -14,8 +14,11 @@ COPY mibici/ ./mibici/
 # solo re-ejecuta este COPY (la capa de dependencias queda cacheada)
 ENV PYTHONPATH=/app
 
-# Servidor MLflow en la máquina anfitriona (issue #124)
-ENV MLFLOW_TRACKING_URI=http://host.docker.internal:5000
+# Por defecto apunta al servicio `mlflow` de la red interna de docker-compose
+# (issue #156). Para correr el contenedor suelto con Docker en lugar de Compose,
+# hay que sobrescribir la variable (ver `make docker-run`):
+#   -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000
+ENV MLFLOW_TRACKING_URI=http://mlflow:5000
 
 EXPOSE 8000
 
