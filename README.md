@@ -3,6 +3,9 @@
 <a target="_blank" href="https://cookiecutter-data-science.drivendata.org/">
     <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
 </a>
+<a target="_blank" href="https://github.com/laloz60/TC5061-Proyecto-Equipo01/actions/workflows/ci.yml">
+    <img src="https://github.com/laloz60/TC5061-Proyecto-Equipo01/actions/workflows/ci.yml/badge.svg" alt="CI/CD Pipeline" />
+</a>
 
 Regresión, clasificación y clustering sobre los viajes del sistema de bicicleta pública de Guadalajara (MiBici), con ingesta reproducible, partición temporal sin fuga y experimentos registrados en MLflow.
 
