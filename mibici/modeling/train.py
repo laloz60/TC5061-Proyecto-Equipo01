@@ -251,17 +251,17 @@ class KMeansClusterTrainer(BaseTrainer):
 
             signature = infer_signature(perfiles["train"], labels)
             mlflow.sklearn.log_model(
-                kmeans_model, 
-                artifact_path="model", 
-                signature=signature, 
-                input_example=perfiles["train"][:5]
+                kmeans_model,
+                artifact_path="model",
+                signature=signature,
+                input_example=perfiles["train"][:5],
             )
 
             if MANIFEST_PATH.exists():
                 dataset_source = mlflow.data.from_pandas(
-                    pd.DataFrame(perfiles["train"]), 
-                    source=str(MANIFEST_PATH), 
-                    name="mibici_p3_profiles"
+                    pd.DataFrame(perfiles["train"]),
+                    source=str(MANIFEST_PATH),
+                    name="mibici_p3_profiles",
                 )
                 mlflow.log_input(dataset_source, context="clustering_training")
 
@@ -324,10 +324,12 @@ def train_p3(
     trainer = KMeansClusterTrainer(n_clusters=n_clusters, init_method=init_method, n_init=n_init)
     trainer.run_pipeline(input_path=input_path, model_path=model_path)
 
+
 @app.command("p3-search")
 def train_p3_search(
     n_clusters_list: str = typer.Option("3,4,5,6", help="Valores de K separados por comas"),
-    input_path: Path = typer.Option(NOMENCLATURA_PARQUET_PATH, help="Ruta de nomenclatura."),):
+    input_path: Path = typer.Option(NOMENCLATURA_PARQUET_PATH, help="Ruta de nomenclatura."),
+):
     """P3 usando Nested Runs y artefactos MLflow"""
 
     import json
@@ -336,13 +338,13 @@ def train_p3_search(
 
     from mibici.config import FIGURES_DIR, MODELS_DIR
     from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
-    
+
     mlflow.set_experiment(EXPERIMENT_NAME)
-    
+
     # TRAINER
     trainer = KMeansClusterTrainer(n_clusters=5, init_method="k-means++", n_init=10)
     perfiles, lats, lons = trainer.load_data(input_path)
-    
+
     # CORRIDA PADRE
     with mlflow.start_run(run_name="p3-parent-search-kmeans"):
         mlflow.set_tags(run_tags("P3"))
@@ -350,9 +352,9 @@ def train_p3_search(
         mlflow.set_tag("model_family", "kmeans")
         mlflow.log_params(split_params())
         mlflow.log_params(data_params())
-        
+
         k_values = [int(k.strip()) for k in n_clusters_list.split(",")]
-        
+
         # CORRIDAS HIJAS ITERADAS
         for k in k_values:
             with mlflow.start_run(run_name=f"p3-candidate-k{k}", nested=True):
@@ -360,13 +362,13 @@ def train_p3_search(
                 kmeans_model, labels = KMeansClusterTrainer(
                     n_clusters=k, init_method="k-means++", n_init=10
                 ).train_model(perfiles["train"])
-                
+
                 labels_val = kmeans_model.predict(perfiles["val"])
                 sil_val = KMeansClusterTrainer._silhouette_o_nan(perfiles["val"], labels_val)
                 sil_test = KMeansClusterTrainer._silhouette_o_nan(
                     perfiles["test"], kmeans_model.predict(perfiles["test"])
                 )
-                
+
                 # Registramos parámetros y métricas
                 mlflow.log_param("model_type", "KMeans")
                 mlflow.log_param("n_clusters", k)
@@ -374,7 +376,7 @@ def train_p3_search(
                 mlflow.log_param("n_init", 10)
                 mlflow.log_metric("val_silhouette_score", sil_val)
                 mlflow.log_metric("test_silhouette_score", sil_test)
-                
+
                 # Etiquetas obligatorias
                 mlflow.set_tags(run_tags("P3"))
                 mlflow.set_tag("stage_of_work", "candidate")
@@ -399,12 +401,16 @@ def train_p3_search(
 
                 mlflow.log_artifacts(str(signature_dir), artifact_path="model_signature")
 
-                mlflow.sklearn.log_model(sk_model=kmeans_model, name="model",
-                    signature=signature, input_example=input_example)
-                
+                mlflow.sklearn.log_model(
+                    sk_model=kmeans_model,
+                    name="model",
+                    signature=signature,
+                    input_example=input_example,
+                )
+
                 # FIGURAS
                 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-                
+
                 # 1. Mapa
                 fig, ax = plt.subplots(figsize=(8, 6))
                 scatter = ax.scatter(lons, lats, c=labels, cmap="viridis", s=50, alpha=0.8)
@@ -437,11 +443,10 @@ def train_p3_search(
                 plt.savefig(clusters_path, dpi=300, bbox_inches="tight")
                 plt.close(fig)
 
-                
                 mlflow.log_artifact(str(map_path), artifact_path="clustering_artifacts")
                 mlflow.log_artifact(str(dist_path), artifact_path="clustering_artifacts")
                 mlflow.log_artifact(str(clusters_path), artifact_path="clustering_artifacts")
-                
+
                 logger.success(
                     f"Nested run y artefactos guardados para K={k} "
                     f"con Silhouette val={sil_val:.4f} test={sil_test:.4f}"
@@ -454,8 +459,9 @@ def train_p3_search(
         mlflow.set_tag("model_family", "gaussian_mixture")
         mlflow.log_params(split_params())
         mlflow.log_params(data_params())
-        
+
         from sklearn.mixture import GaussianMixture
+
         for k in k_values:
             with mlflow.start_run(run_name=f"p3-candidate-gmm-k{k}", nested=True):
                 gmm = GaussianMixture(n_components=k, random_state=SEED, n_init=5)
@@ -467,15 +473,16 @@ def train_p3_search(
                 sil_test_gmm = KMeansClusterTrainer._silhouette_o_nan(
                     perfiles["test"], gmm.predict(perfiles["test"])
                 )
-                
+
                 mlflow.log_param("model_type", "GaussianMixture")
                 mlflow.log_param("n_clusters", k)
                 mlflow.log_metric("val_silhouette_score", sil_val_gmm)
                 mlflow.log_metric("test_silhouette_score", sil_test_gmm)
-                
+
                 tags_gmm = run_tags("P3")
                 tags_gmm.update({"stage_of_work": "candidate", "model_family": "gaussian_mixture"})
                 mlflow.set_tags(tags_gmm)
+
 
 @app.command("p1")
 def train_p1(
@@ -497,11 +504,16 @@ def train_p1(
         n_estimators=n_estimators,
     )
 
+
 @app.command("p1-search")
 def train_p1_search(
-    n_estimators_list: str = typer.Option("50,100,200", help="Valores de n_estimators separados por comas"),
-    features_path: Path = typer.Option(PROCESSED_DATA_DIR / "features_estacion_hora.parquet", help="Features estación x hora."),):
-
+    n_estimators_list: str = typer.Option(
+        "50,100,200", help="Valores de n_estimators separados por comas"
+    ),
+    features_path: Path = typer.Option(
+        PROCESSED_DATA_DIR / "features_estacion_hora.parquet", help="Features estación x hora."
+    ),
+):
     """P1"""
     import json
     import warnings
@@ -516,20 +528,24 @@ def train_p1_search(
     )
     from mibici.modeling.tracking import EXPERIMENT_NAME, data_params, run_tags, split_params
 
-    warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.utils.parallel") # Ignorar la advertencia
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, module="sklearn.utils.parallel"
+    )  # Ignorar la advertencia
     mlflow.set_experiment(EXPERIMENT_NAME)
-    
-    train, val, _ = load_p1_data(features_path) # Cargar train y val
-    
+
+    train, val, _ = load_p1_data(features_path)  # Cargar train y val
+
     df_full = pd.read_parquet(features_path)  # Cargar test
     test_df = df_full[df_full["split"] == "test"].copy()
 
-    test_df[FEATURES] = test_df[FEATURES].fillna(0) # Rellena NAS
-    
+    test_df[FEATURES] = test_df[FEATURES].fillna(0)  # Rellena NAS
+
     y_real = test_df[TARGET].to_numpy()
     y_val = val[TARGET].to_numpy()
-    
-    print(f"\nTest shape: {test_df.shape} | y_real min: {y_real.min()}, max: {y_real.max()}, mean: {y_real.mean():.2f}\n")
+
+    print(
+        f"\nTest shape: {test_df.shape} | y_real min: {y_real.min()}, max: {y_real.max()}, mean: {y_real.mean():.2f}\n"
+    )
 
     estimators_values = [int(n.strip()) for n in n_estimators_list.split(",")]
 
@@ -540,24 +556,23 @@ def train_p1_search(
         mlflow.set_tag("model_family", "random_forest")
         mlflow.log_params(split_params())
         mlflow.log_params(data_params())
-        
+
         # Hijas iteradas
         for n_est in estimators_values:
             with mlflow.start_run(run_name=f"p1-candidate-rf-n{n_est}", nested=True):
-                
                 model = build_model("rf", n_estimators=n_est)
                 logger.info(f"Entrenando candidato RF con n_estimators={n_est}...")
                 model.fit(train[FEATURES], train[TARGET])
-                
+
                 # seleccion en VALIDACION: el test queda para el reporte final
                 y_pred_val = np.clip(model.predict(val[FEATURES]), 0, None)
                 val_metrics = regression_metrics(y_val, y_pred_val)
 
                 y_pred = model.predict(test_df[FEATURES])
                 y_pred = np.clip(y_pred, 0, None)
-                
+
                 metrics = regression_metrics(y_real, y_pred)
-                
+
                 mlflow.log_param("model_type", "RandomForestRegressor")
                 mlflow.log_param("n_estimators", n_est)
                 mlflow.log_param("max_depth", 16)
@@ -568,12 +583,12 @@ def train_p1_search(
                 mlflow.log_metric("test_mae", metrics["mae"])
                 mlflow.log_metric("test_rmse", metrics["rmse"])
                 mlflow.log_metric("test_r2", metrics["r2"])
-                
+
                 mlflow.set_tags(run_tags("P1"))
                 mlflow.set_tag("stage_of_work", "candidate")
                 mlflow.set_tag("model_family", "random_forest")
 
-                signature = infer_signature(train[FEATURES], y_pred[:len(train[FEATURES])])
+                signature = infer_signature(train[FEATURES], y_pred[: len(train[FEATURES])])
                 input_example = train[FEATURES].head(5)
 
                 # SUBCARPETAS
@@ -581,55 +596,59 @@ def train_p1_search(
                 temp_plots = temp_dir / "plots"
                 temp_data = temp_dir / "data"
                 temp_config = temp_dir / "config"
-                
+
                 temp_plots.mkdir(parents=True, exist_ok=True)
                 temp_data.mkdir(parents=True, exist_ok=True)
                 temp_config.mkdir(parents=True, exist_ok=True)
-                
+
                 # Firma entrada/salida
-                signature = infer_signature(train[FEATURES], y_pred[:len(train[FEATURES])])
+                signature = infer_signature(train[FEATURES], y_pred[: len(train[FEATURES])])
                 input_example = train[FEATURES].head(5)
 
                 mlflow.sklearn.log_model(
-                    sk_model=model, 
-                    artifact_path="model", 
+                    sk_model=model,
+                    artifact_path="model",
                     signature=signature,
-                    input_example=input_example, 
-                    skops_trusted_types=["sklearn.tree._tree.Tree"])
+                    input_example=input_example,
+                    skops_trusted_types=["sklearn.tree._tree.Tree"],
+                )
 
                 # Data/ JSON
                 if MANIFEST_PATH.exists():
                     df_mlflow_input = train[FEATURES].copy()
                     df_mlflow_input[TARGET] = train[TARGET]
-                    
+
                     dataset_source = mlflow.data.from_pandas(
-                        df_mlflow_input, 
-                        source=str(MANIFEST_PATH), 
-                        name="mibici_p1_train", 
-                        targets=TARGET) 
+                        df_mlflow_input,
+                        source=str(MANIFEST_PATH),
+                        name="mibici_p1_train",
+                        targets=TARGET,
+                    )
                     mlflow.log_input(dataset_source, context="training")
-                    
+
                     manifiesto_data = {
-                        "version_datos": "v2.0-entregable2", 
+                        "version_datos": "v2.0-entregable2",
                         "fuente_origen": str(MANIFEST_PATH),
-                        "registros_entrenamiento": len(train), 
-                        "columnas_features": FEATURES, 
-                        "anonimizado": True}
+                        "registros_entrenamiento": len(train),
+                        "columnas_features": FEATURES,
+                        "anonimizado": True,
+                    }
                     with open(temp_data / "manifiesto_ingesta.json", "w", encoding="utf-8") as f:
                         json.dump(manifiesto_data, f, indent=4)
-                    
+
                     mlflow.log_artifacts(str(temp_data), artifact_path="data")
 
                 # Config/
                 config_corrida = {
-                    "n_estimators": n_est, 
+                    "n_estimators": n_est,
                     "max_depth": 16,
-                    "min_samples_leaf": 20, 
+                    "min_samples_leaf": 20,
                     "global_seed": SEED,
-                    "features_count": len(FEATURES)}
+                    "features_count": len(FEATURES),
+                }
                 with open(temp_config / "config_ejecucion.json", "w", encoding="utf-8") as f:
                     json.dump(config_corrida, f, indent=4)
-                
+
                 mlflow.log_artifacts(str(temp_config), artifact_path="config")
 
                 # Graficas plots/
@@ -638,8 +657,12 @@ def train_p1_search(
                 y_r_sample = y_real[idx]
                 y_p_sample = y_pred[idx]
                 residuos = y_r_sample - y_p_sample
-                
-                limite = float(np.percentile(y_real, 99.9)) if len(y_real) > 0 and np.max(y_real) > 0 else 25.0
+
+                limite = (
+                    float(np.percentile(y_real, 99.9))
+                    if len(y_real) > 0 and np.max(y_real) > 0
+                    else 25.0
+                )
                 limite = max(limite, 5.0)
 
                 # Gráfica Real vs Pred
@@ -658,14 +681,21 @@ def train_p1_search(
                 fig2, ax2 = plt.subplots(figsize=(6, 5))
                 res_lim = float(np.percentile(np.abs(residuos), 99)) if len(residuos) > 0 else 1.0
                 res_lim = max(res_lim, 1.0)
-                ax2.hist(residuos, bins=80, range=(-res_lim, res_lim), color="tab:orange", edgecolor="black", linewidth=0.5)
+                ax2.hist(
+                    residuos,
+                    bins=80,
+                    range=(-res_lim, res_lim),
+                    color="tab:orange",
+                    edgecolor="black",
+                    linewidth=0.5,
+                )
                 ax2.axvline(0, color="black", linestyle="--")
                 ax2.set_xlabel("Residuo (real - predicho)")
                 ax2.set_ylabel("Frecuencia")
                 ax2.set_title(f"Distribución de Residuos (n_estimators={n_est})")
                 fig2.savefig(temp_plots / "residuos.png", dpi=150, bbox_inches="tight")
                 plt.close(fig2)
-                
+
                 mlflow.log_artifacts(str(temp_plots), artifact_path="plots")
 
                 # Firma en json dentro de model_signature
@@ -678,27 +708,30 @@ def train_p1_search(
                 mlflow.log_artifacts(str(signature_dir), artifact_path="model_signature")
 
                 import shutil
+
                 # Estructura
                 if temp_dir.exists():
                     shutil.rmtree(temp_dir)
-                logger.success(f"Nested run - n_estimators={n_est} - Test MAE: {metrics['mae']:.3f}")
+                logger.success(
+                    f"Nested run - n_estimators={n_est} - Test MAE: {metrics['mae']:.3f}"
+                )
 
                 # Graficos juntos se puede descomentar en caso de requerir
 
                 # FIGURES_DIR.mkdir(parents=True, exist_ok=True)
                 # fig_path = FIGURES_DIR / f"p1_rf_n{n_est}_pred_vs_real.png"
-                
+
                 # np.random.seed(SEED)
                 # idx = np.random.choice(len(y_real), size=min(50_000, len(y_real)), replace=False)
                 # y_r_sample = y_real[idx]
                 # y_p_sample = y_pred[idx]
                 # residuos = y_r_sample - y_p_sample
-                
+
                 # limite = float(np.percentile(y_real, 99.9)) if len(y_real) > 0 and np.max(y_real) > 0 else 25.0
                 # limite = max(limite, 5.0)
 
                 # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-                
+
                 # ax1.scatter(y_r_sample, y_p_sample, s=4, alpha=0.2, color="tab:blue")
                 # ax1.plot([0, limite], [0, limite], color="black", linestyle="--")
                 # ax1.set_xlim(0, limite)
@@ -709,7 +742,7 @@ def train_p1_search(
 
                 # res_lim = float(np.percentile(np.abs(residuos), 99)) if len(residuos) > 0 else 1.0
                 # res_lim = max(res_lim, 1.0)
-                
+
                 # ax2.hist(residuos, bins=80, range=(-res_lim, res_lim), color="tab:blue", edgecolor="black", linewidth=0.5)
                 # ax2.axvline(0, color="black", linestyle="--")
                 # ax2.set_xlabel("Residuo (real - predicho)")
@@ -719,10 +752,10 @@ def train_p1_search(
                 # fig.suptitle(f"P1 - RF (n_estimators={n_est})")
                 # fig.savefig(fig_path, dpi=150, bbox_inches="tight")
                 # plt.close(fig)
-                
+
                 # mlflow.log_artifact(str(fig_path), artifact_path="figures")
-               # logger.success(f"Nested run - n_estimators={n_est} - Test MAE: {metrics['mae']:.3f}")
-    
+            # logger.success(f"Nested run - n_estimators={n_est} - Test MAE: {metrics['mae']:.3f}")
+
     # Modelo de "Gradient Boosting"
     with mlflow.start_run(run_name="p1-parent-search-gbr"):
         mlflow.set_tags(run_tags("P1"))
@@ -730,25 +763,30 @@ def train_p1_search(
         mlflow.set_tag("model_family", "gradient_boosting")
         mlflow.log_params(split_params())
         mlflow.log_params(data_params())
-        
+
         for n_est in estimators_values:
             with mlflow.start_run(run_name=f"p1-candidate-gbr-n{n_est}", nested=True):
-                model_gbr = GradientBoostingRegressor(n_estimators=n_est, max_depth=5, random_state=SEED)
+                model_gbr = GradientBoostingRegressor(
+                    n_estimators=n_est, max_depth=5, random_state=SEED
+                )
                 logger.info(f"Entrenando candidato GBR con n_estimators={n_est}...")
                 model_gbr.fit(train[FEATURES], train[TARGET])
-                
+
                 y_pred_gbr = np.clip(model_gbr.predict(test_df[FEATURES]), 0, None)
                 metrics_gbr = regression_metrics(y_real, y_pred_gbr)
-                
+
                 mlflow.log_param("model_type", "GradientBoostingRegressor")
                 mlflow.log_param("n_estimators", n_est)
                 mlflow.log_metric("test_mae", metrics_gbr["mae"])
                 mlflow.log_metric("test_rmse", metrics_gbr["rmse"])
                 mlflow.log_metric("test_r2", metrics_gbr["r2"])
-                
+
                 tags_gbr = run_tags("P1")
-                tags_gbr.update({"stage_of_work": "candidate", "model_family": "gradient_boosting"})
+                tags_gbr.update(
+                    {"stage_of_work": "candidate", "model_family": "gradient_boosting"}
+                )
                 mlflow.set_tags(tags_gbr)
+
 
 @app.command("p2")
 def train_p2(
@@ -779,7 +817,7 @@ def train_p2(
 
     columnas = ["estacion_id", "salidas", "llegadas", "split"] + FEATURES
     df = pd.read_parquet(features_path, columns=columnas)
-    
+
     # La etiqueta va antes del dropna: necesita las 3 horas siguientes de cada estacion
     df = add_risk_label(df)
     df = df.dropna(subset=FEATURES + ["riesgo"])
@@ -787,7 +825,7 @@ def train_p2(
     train = df[df["split"] == "train"]
     val = df[df["split"] == "val"]
     test = df[df["split"] == "test"]
-    
+
     X_train, y_train = train[FEATURES], train["riesgo"].astype(int)
     X_val, y_val = val[FEATURES], val["riesgo"].astype(int)
     X_test, y_test = test[FEATURES], test["riesgo"].astype(int)
@@ -809,17 +847,19 @@ def train_p2(
             mlflow.set_tags(tags)
             mlflow.log_params(split_params())
             mlflow.log_params(data_params())
-            mlflow.log_params({
-                "modelo": model_name,
-                "random_state": SEED,
-                "risk_horizon_hours": RISK_HORIZON_HOURS,
-                "risk_alpha": RISK_ALPHA,
-            })
-            
+            mlflow.log_params(
+                {
+                    "modelo": model_name,
+                    "random_state": SEED,
+                    "risk_horizon_hours": RISK_HORIZON_HOURS,
+                    "risk_alpha": RISK_ALPHA,
+                }
+            )
+
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
             y_pred_val = model.predict(X_val)
-            
+
             metricas = {
                 "val_precision": precision_score(y_val, y_pred_val, zero_division=0),
                 "val_recall": recall_score(y_val, y_pred_val, zero_division=0),
@@ -831,11 +871,15 @@ def train_p2(
                 "test_roc_auc": 0.5,
             }
             mlflow.log_metrics(metricas)
-            
+
             signature = infer_signature(X_test, y_pred)
-            mlflow.sklearn.log_model(model, artifact_path="model", signature=signature, input_example=X_test.head(5))
+            mlflow.sklearn.log_model(
+                model, artifact_path="model", signature=signature, input_example=X_test.head(5)
+            )
             if MANIFEST_PATH.exists():
-                ds = mlflow.data.from_pandas(X_train, source=str(MANIFEST_PATH), name="mibici_p2_train")
+                ds = mlflow.data.from_pandas(
+                    X_train, source=str(MANIFEST_PATH), name="mibici_p2_train"
+                )
                 mlflow.log_input(ds, context="training")
 
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -862,41 +906,45 @@ def train_p2(
             mlflow.set_tags(parent_tags)
             mlflow.log_params(split_params())
             mlflow.log_params(data_params())
-            mlflow.log_params({
-                "modelo": model_name,
-                "random_state": SEED,
-                "risk_horizon_hours": RISK_HORIZON_HOURS,
-                "risk_alpha": RISK_ALPHA,
-            })
+            mlflow.log_params(
+                {
+                    "modelo": model_name,
+                    "random_state": SEED,
+                    "risk_horizon_hours": RISK_HORIZON_HOURS,
+                    "risk_alpha": RISK_ALPHA,
+                }
+            )
 
             C_values = [0.1, 1.0, 10.0]
             mejor_f1_val = -1
             mejor_C = None
-            mejor_umbral_global = 0.5 # Guardará el umbral óptimo
+            mejor_umbral_global = 0.5  # Guardará el umbral óptimo
 
             for c_val in C_values:
                 with mlflow.start_run(run_name=f"p2-child-logreg-C{c_val}", nested=True):
                     child_tags = run_tags("P2")
                     child_tags.update({"model_family": "logreg", "stage_of_work": "candidate"})
                     mlflow.set_tags(child_tags)
-                    
+
                     sub_model = make_pipeline(
                         StandardScaler(),
-                        LogisticRegression(C=c_val, class_weight="balanced", random_state=SEED, max_iter=1000),
+                        LogisticRegression(
+                            C=c_val, class_weight="balanced", random_state=SEED, max_iter=1000
+                        ),
                     )
                     sub_model.fit(X_train, y_train)
                     y_val_prob = sub_model.predict_proba(X_val)[:, 1]
-                    
+
                     # Buscar el mejor umbral en Validación
                     f1_max_umbral = 0
                     mejor_umbral = 0.5
-                    for umbral in np.linspace(0.3, 0.7, 41): # Prueba 41 umbrales entre 0.3 y 0.7
+                    for umbral in np.linspace(0.3, 0.7, 41):  # Prueba 41 umbrales entre 0.3 y 0.7
                         y_val_pred_u = (y_val_prob >= umbral).astype(int)
                         f1_u = f1_score(y_val, y_val_pred_u, average="macro", zero_division=0)
                         if f1_u > f1_max_umbral:
                             f1_max_umbral = f1_u
                             mejor_umbral = umbral
-                    
+
                     # Evaluar con el mejor umbral encontrado
                     y_val_pred_opt = (y_val_prob >= mejor_umbral).astype(int)
                     val_metrics = {
@@ -915,15 +963,19 @@ def train_p2(
                         mejor_umbral_global = mejor_umbral
 
             # Entrenar modelo final y evaluar en TEST con el umbral óptimo
-            logger.info(f"Mejor C (Val): {mejor_C} | Mejor Umbral (Val): {mejor_umbral_global:.3f}")
+            logger.info(
+                f"Mejor C (Val): {mejor_C} | Mejor Umbral (Val): {mejor_umbral_global:.3f}"
+            )
             mejor_modelo = make_pipeline(
                 StandardScaler(),
-                LogisticRegression(C=mejor_C, class_weight="balanced", random_state=SEED, max_iter=1000),
+                LogisticRegression(
+                    C=mejor_C, class_weight="balanced", random_state=SEED, max_iter=1000
+                ),
             )
             mejor_modelo.fit(X_train, y_train)
-            
+
             y_prob = mejor_modelo.predict_proba(X_test)[:, 1]
-            y_pred = (y_prob >= mejor_umbral_global).astype(int) # Predicción con umbral ajustado
+            y_pred = (y_prob >= mejor_umbral_global).astype(int)  # Predicción con umbral ajustado
 
             # val: con el mejor C y umbral ya elegidos, se reporta en val para la seleccion
             y_val_prob = mejor_modelo.predict_proba(X_val)[:, 1]
@@ -947,16 +999,23 @@ def train_p2(
             mlflow.log_metrics(test_metrics)
 
             signature = infer_signature(X_test, y_pred)
-            mlflow.sklearn.log_model(mejor_modelo, artifact_path="model", signature=signature, input_example=X_test.head(5))
-            
+            mlflow.sklearn.log_model(
+                mejor_modelo,
+                artifact_path="model",
+                signature=signature,
+                input_example=X_test.head(5),
+            )
+
             if MANIFEST_PATH.exists():
-                ds = mlflow.data.from_pandas(X_train, source=str(MANIFEST_PATH), name="mibici_p2_train")
+                ds = mlflow.data.from_pandas(
+                    X_train, source=str(MANIFEST_PATH), name="mibici_p2_train"
+                )
                 mlflow.log_input(ds, context="training")
 
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
             joblib.dump(mejor_modelo, model_path)
             mlflow.log_artifact(str(model_path), artifact_path="model")
-            
+
             # Artefactos
             FIGURES_DIR.mkdir(parents=True, exist_ok=True)
             plt.figure(figsize=(6, 6))
@@ -972,15 +1031,26 @@ def train_p2(
             # Curva PR con el umbral marcado
             fig, ax = plt.subplots(figsize=(6, 5))
             PrecisionRecallDisplay.from_predictions(
-                y_test, y_prob, name="LogReg", plot_chance_level=True, drop_intermediate=True, ax=ax
+                y_test,
+                y_prob,
+                name="LogReg",
+                plot_chance_level=True,
+                drop_intermediate=True,
+                ax=ax,
             )
             # Dibujar el punto exacto de nuestro umbral óptimo (ya calculado en y_pred)
             precision_opt = precision_score(y_test, y_pred, zero_division=0)
             recall_opt = recall_score(y_test, y_pred, zero_division=0)
-            
-            ax.plot(recall_opt, precision_opt, 'ro', markersize=8, label=f'Umbral {mejor_umbral_global:.2f} (Val)')
+
+            ax.plot(
+                recall_opt,
+                precision_opt,
+                "ro",
+                markersize=8,
+                label=f"Umbral {mejor_umbral_global:.2f} (Val)",
+            )
             ax.legend()
-                
+
             ax.set_title("Curva Precision-Recall - P2 (LOGREG)")
             pr_path = FIGURES_DIR / "curva_pr_p2_logreg.png"
             fig.savefig(pr_path, dpi=150, bbox_inches="tight")
@@ -988,22 +1058,27 @@ def train_p2(
             plt.close(fig)
             mlflow.log_metric("test_average_precision", average_precision_score(y_test, y_prob))
 
-            logger.success(f"Búsqueda nested runs P2 finalizada. Mejor F1 Macro (Val): {mejor_f1_val:.3f}")
+            logger.success(
+                f"Búsqueda nested runs P2 finalizada. Mejor F1 Macro (Val): {mejor_f1_val:.3f}"
+            )
     # Nuevo modelo elgido "rf"
     elif model_name == "rf":
         from sklearn.ensemble import RandomForestClassifier
+
         with mlflow.start_run(run_name="P2-parent-search-rf"):
             parent_tags = run_tags("P2")
             parent_tags.update({"model_family": "random_forest", "stage_of_work": "search"})
             mlflow.set_tags(parent_tags)
             mlflow.log_params(split_params())
             mlflow.log_params(data_params())
-            mlflow.log_params({
-                "modelo": model_name,
-                "random_state": SEED,
-                "risk_horizon_hours": RISK_HORIZON_HOURS,
-                "risk_alpha": RISK_ALPHA,
-            })
+            mlflow.log_params(
+                {
+                    "modelo": model_name,
+                    "random_state": SEED,
+                    "risk_horizon_hours": RISK_HORIZON_HOURS,
+                    "risk_alpha": RISK_ALPHA,
+                }
+            )
 
             n_estimators_list = [50, 100, 200]
             mejor_f1_val = -1
@@ -1012,19 +1087,28 @@ def train_p2(
             for n_est in n_estimators_list:
                 with mlflow.start_run(run_name=f"p2-child-rf-n{n_est}", nested=True):
                     child_tags = run_tags("P2")
-                    child_tags.update({"model_family": "random_forest", "stage_of_work": "candidate"})
+                    child_tags.update(
+                        {"model_family": "random_forest", "stage_of_work": "candidate"}
+                    )
                     mlflow.set_tags(child_tags)
-                    
-                    sub_model = RandomForestClassifier(n_estimators=n_est, class_weight="balanced", random_state=SEED, max_depth=10)
+
+                    sub_model = RandomForestClassifier(
+                        n_estimators=n_est,
+                        class_weight="balanced",
+                        random_state=SEED,
+                        max_depth=10,
+                    )
                     sub_model.fit(X_train, y_train)
-                    
+
                     y_val_pred = sub_model.predict(X_val)
                     y_val_prob = sub_model.predict_proba(X_val)[:, 1]
-                    
+
                     val_metrics = {
                         "val_precision": precision_score(y_val, y_val_pred, zero_division=0),
                         "val_recall": recall_score(y_val, y_val_pred, zero_division=0),
-                        "val_f1_macro": f1_score(y_val, y_val_pred, average="macro", zero_division=0),
+                        "val_f1_macro": f1_score(
+                            y_val, y_val_pred, average="macro", zero_division=0
+                        ),
                         "val_roc_auc": roc_auc_score(y_val, y_val_prob),
                     }
                     mlflow.log_param("n_estimators", n_est)
@@ -1035,7 +1119,9 @@ def train_p2(
                         mejor_n = n_est
 
             logger.info(f"Mejor n_estimators encontrado en validación: {mejor_n}")
-            mejor_modelo = RandomForestClassifier(n_estimators=mejor_n, class_weight="balanced", random_state=SEED, max_depth=10)
+            mejor_modelo = RandomForestClassifier(
+                n_estimators=mejor_n, class_weight="balanced", random_state=SEED, max_depth=10
+            )
             mejor_modelo.fit(X_train, y_train)
             y_pred = mejor_modelo.predict(X_test)
             y_prob = mejor_modelo.predict_proba(X_test)[:, 1]
@@ -1061,8 +1147,15 @@ def train_p2(
             mlflow.log_metrics(test_metrics)
 
             signature = infer_signature(X_test, y_pred)
-            mlflow.sklearn.log_model(mejor_modelo, artifact_path="model", signature=signature, input_example=X_test.head(5))
-            logger.success(f"Búsqueda nested runs P2 RF finalizada. Mejor F1 Macro en val: {mejor_f1_val:.3f}")
+            mlflow.sklearn.log_model(
+                mejor_modelo,
+                artifact_path="model",
+                signature=signature,
+                input_example=X_test.head(5),
+            )
+            logger.success(
+                f"Búsqueda nested runs P2 RF finalizada. Mejor F1 Macro en val: {mejor_f1_val:.3f}"
+            )
     else:
         raise ValueError(f"Modelo no valido: {model_name}. Usar 'dummy' o 'logreg'.")
 
