@@ -85,6 +85,33 @@ check-all: test validate security
 docker-build:
 	docker build -t mibici-api:latest .
 
+## Levantar todo el sistema (API + MLflow) con un solo comando y esperar a
+## que los dos servicios queden healthy (issue #156)
+.PHONY: compose-up
+compose-up:
+	docker compose up -d --build --wait
+
+## Estado de los servicios: los dos deben quedar "healthy"
+.PHONY: compose-ps
+compose-ps:
+	docker compose ps
+
+## Smoke test de la API levantada con Compose
+.PHONY: compose-test
+compose-test:
+	bash scripts/test_api.sh http://localhost:8000
+
+## Apagar el sistema (mlflow.db y mlruns/ quedan en el host)
+.PHONY: compose-down
+compose-down:
+	docker compose down
+
+## Logs de los dos servicios
+.PHONY: compose-logs
+compose-logs:
+	docker compose logs -f --tail=50
+
+
 ## Run the API container (requires the MLflow server running on the host, see README)
 .PHONY: docker-run
 docker-run:

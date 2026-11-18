@@ -22,6 +22,16 @@ reports/
 references/
 docs/
 
+# Infraestructura de orquestacion y pruebas (no van dentro de la imagen)
+# Nota: `docker/` NO se excluye porque ahi vive docker/mlflow.Dockerfile,
+# que BuildKit debe poder resolver desde el contexto de construccion.
+docker-compose.yml
+tests/
+scripts/
+Makefile
+MLproject
+python_env.yaml
+
 # Secretos y SO
 .env
 .env.*

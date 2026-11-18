@@ -1,0 +1,131 @@
+# =============================================================================
+# Orquestación del sistema MiBici - Equipo 01 (Entregable 7, issue #156)
+# =============================================================================
+# El sistema completo se levanta con un solo comando:
+#
+#     docker compose up -d
+#
+# Servicios:
+#   mlflow  servidor de tracking + Model Registry  -> http://localhost:5001
+#   api     FastAPI con los 3 modelos @champion    -> http://localhost:8000
+#   (el 5001 es el puerto publicado en el host; dentro de la red los servicios
+#    se hablan por nombre en el 5000, ver nota en `ports` del servicio mlflow)
+#
+# Verificación:
+#     docker compose ps                # ambos servicios "healthy"
+#     bash scripts/test_api.sh         # smoke test de los 4 endpoints
+#
+# Apagar (mlflow.db y mlruns/ persisten en el host):
+#     docker compose down
+#
+# Requisitos previos:
+#     cp .env.example .env             # opcional: el compose tolera su ausencia
+#     docker build no requiere datos ni artefactos (ver .dockerignore)
+# =============================================================================
+
+name: mibici
+
+services:
+  # ---------------------------------------------------------------------
+  # Servidor de tracking: guarda las versiones del Model Registry (SQLite)
+  # y sirve los artefactos de los modelos por HTTP.
+  # ---------------------------------------------------------------------
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/mlflow.Dockerfile
+    image: mibici-mlflow:latest
+    ports:
+      # Puerto del HOST parametrizado. El contenedor siempre escucha en 5000 y
+      # la API se conecta por la red interna a `mlflow:5000`; el 5001 solo
+      # afecta a http://localhost:5001 desde el navegador o desde los notebooks.
+      # Se evita el 5000 porque en macOS el Receptor AirPlay (ControlCenter)
+      # lo ocupa y Docker no puede hacer bind ("address already in use"):
+      #   MLFLOW_PORT=5000  en .env  -> usar 5000 si AirPlay esta desactivado
+      - "${MLFLOW_PORT:-5001}:5000"
+    environment:
+      # Proteccion DNS-rebinding: el hostname del contenedor (`mlflow`) no es
+      # localhost ni una IP privada, asi que sin esta lista la API recibiria
+      # "403 Invalid Host header" en cada consulta al registry.
+      MLFLOW_SERVER_ALLOWED_HOSTS: "localhost:5000,127.0.0.1:5000,mlflow:5000,host.docker.internal:5000"
+    volumes:
+      # Bind mounts (no copias): el Model Registry y los 1.3 GB de artefactos
+      # viven en el host y sobreviven a `docker compose down`.
+      - ./mlflow.db:/app/mlflow.db
+      - ./mlruns:/app/mlruns
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=4)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+    # 3g: con --workers 2 el servidor consume ~1.9 GB de memoria anonima (medido
+    # en /sys/fs/cgroup/memory.stat); con 2g quedaba al 94% del limite y un
+    # podia recibir OOM kill. El exceso reportado en `docker stats` es en su
+    # mayor parte cache de pagina, pero el limite lo fijamos con holgura.
+    mem_limit: 3g
+    networks:
+      - mibici-net
+
+  # ---------------------------------------------------------------------
+  # API REST: descarga los modelos @champion al arrancar y los sirve.
+  # ---------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mibici-api:latest
+    ports:
+      # Puerto fijo (sin rango). Un rango tipo "8000-8009:8000" hace que Docker
+      # elija el puerto al azar: en una corrida salio 8001 con el 8000 libre y
+      # scripts/test_api.sh y Locust apuntan a 8000. La reproducibilidad pesa
+      # mas que el escalamiento por rangos.
+      # Para `--scale api=2` (issue #162, FinOps) hay que publicar un rango o
+      # quitar el mapeo y poner un proxy; ver comentario en ese issue.
+      - "8000:8000"
+    env_file:
+      # Opcional: si no existe `.env` el sistema igual levanta (required: false).
+      # Sirve para que otros integrantes del equipo clonen y corran sin tocar nada.
+      - path: .env
+        required: false
+    environment:
+      # `environment` tiene prioridad sobre `env_file`. Dentro de la red del
+      # proyecto el servidor es el servicio `mlflow`, no el host, por lo que la
+      # URI del host (127.0.0.1:5000) no aplica aqui.
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    depends_on:
+      # La API no arranca a consultar el registry hasta que MLflow responde 200
+      # en /health: evita el error "Connection refused" en el primer arranque.
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      # La descarga de los 3 modelos @champion tarda ~60 s: sin este margen
+      # Docker marca el contenedor como "unhealthy" y lo reinicia en bucle.
+      start_period: 90s
+    restart: unless-stopped
+    mem_limit: 4g
+    networks:
+      - mibici-net
+
+# Red dedicada: los servicios se resuelven por nombre (`mlflow`) y el trafico
+# de predicciones no se mezcla con la red por defecto de Docker.
+networks:
+  mibici-net:
+    driver: bridge
