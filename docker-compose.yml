@@ -100,6 +100,7 @@ services:
       # proyecto el servidor es el servicio `mlflow`, no el host, por lo que la
       # URI del host (127.0.0.1:5000) no aplica aqui.
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      MIBICI_MOCK_REGISTRY: "${MIBICI_MOCK_REGISTRY:-0}"
     depends_on:
       # La API no arranca a consultar el registry hasta que MLflow responde 200
       # en /health: evita el error "Connection refused" en el primer arranque.

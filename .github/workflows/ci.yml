@@ -115,6 +115,8 @@ jobs:
           chmod 777 mlruns
 
       - name: Start stack with Docker Compose (--build --wait)
+        env:
+          MIBICI_MOCK_REGISTRY: "1"
         run: docker compose up -d --build --wait
 
       - name: Run API smoke tests (scripts/test_api.sh)
