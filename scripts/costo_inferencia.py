@@ -1,8 +1,10 @@
 """Costo por inferencia por escenario y numero de replicas (issue #163).
 
-Cruza los picos de recursos (reports/load/docker_stats_picos.csv, de
-scripts/resumen_stats.py) con el resumen de Locust ({ESC}[_2r]_stats.csv)
-y estima el costo por inferencia en AWS EC2 (us-east-1, Linux).
+Cruza el pico SIMULTANEO de recursos del host (reports/load/docker_stats.csv,
+suma de todos los contenedores en cada muestra) con el resumen de Locust
+({ESC}[_2r]_stats.csv) y estima el costo por inferencia en AWS EC2
+(us-east-1, Linux). Se usa el pico simultaneo y no la suma de los picos de
+cada servicio, porque esos picos no ocurren al mismo tiempo.
 
 Formula (la del issue, "mas defendible"):
     costo/inferencia = precio_hora * duracion_h / peticiones_exitosas
@@ -28,6 +30,16 @@ INSTANCIAS = {
 DURACION_S = {"A": 120, "B": 180, "C": 60}  # igual que scripts/load_test.sh
 MEM_SO_GIB = 0.5  # reserva para el sistema operativo y Docker
 MARGEN = 1.2  # 20 % de holgura sobre el pico observado
+A_MIB = {"GiB": 1024, "MiB": 1, "KiB": 1 / 1024, "B": 1 / 1024**2}
+
+
+def a_mib(valor: str) -> float:
+    """'1.2GiB' -> 1228.8 (MiB). Igual que en scripts/resumen_stats.py."""
+    valor = valor.strip()
+    for unidad, factor in A_MIB.items():  # GiB antes que B: el orden importa
+        if valor.endswith(unidad):
+            return float(valor[: -len(unidad)]) * factor
+    raise ValueError(f"Unidad de memoria no reconocida: {valor}")
 
 
 def instancia_minima(mem_gib: float, vcpu: float) -> str:
@@ -45,10 +57,15 @@ def resumen_locust(ruta: Path) -> pd.Series:
 
 def main() -> None:
     carpeta = Path(sys.argv[1] if len(sys.argv) > 1 else "reports/load")
-    picos = pd.read_csv(carpeta / "docker_stats_picos.csv")
+    stats = pd.read_csv(carpeta / "docker_stats.csv")
+    stats["vcpu"] = stats["cpu_perc"].str.rstrip("%").astype(float) / 100
+    stats["mem_gib"] = stats["mem_usada"].map(a_mib) / 1024
+    # Host = suma de contenedores por muestra; el pico es el maximo de esa suma
+    host = stats.groupby(["escenario", "replicas", "timestamp"])[["vcpu", "mem_gib"]].sum()
+    picos = host.groupby(level=["escenario", "replicas"]).max()
 
     filas = []
-    for (esc, rep), grupo in picos.groupby(["escenario", "replicas"]):
+    for (esc, rep), pico in picos.iterrows():
         ruta_locust = carpeta / f"{esc}{'_2r' if rep == 2 else ''}_stats.csv"
         if not ruta_locust.exists():
             print(f"Aviso: falta {ruta_locust}, se omite {esc} x{rep}")
@@ -57,8 +74,7 @@ def main() -> None:
         exitosas = int(loc["Request Count"] - loc["Failure Count"])
         dur_h = DURACION_S[esc] / 3600
 
-        mem_gib = grupo["mem_max_mib"].sum() / 1024  # suma de servicios = host
-        vcpu = grupo["vcpu_pico"].sum()
+        mem_gib, vcpu = pico["mem_gib"], pico["vcpu"]
         inst = instancia_minima(mem_gib, vcpu)
         cpus, mem_inst, od, spot = INSTANCIAS[inst]
 
