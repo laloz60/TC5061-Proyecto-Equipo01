@@ -1,26 +1,31 @@
 # Optimizaciones FinOps
 
-Supuestos de precios, fórmulas y criterio de instancia mínima: ver `reports/load/finops.md` (AWS EC2 us-east-1, Linux, precios del 2026-11-19; memoria pico × 1.2 + 0.5 GiB).
+Supuestos de precios, fórmulas y criterio de instancia mínima: ver `reports/load/finops.md` (AWS EC2 us-east-1, Linux, precios del 2026-11-19; memoria pico × 1.2 + 0.5 GiB y vCPU pico × 1.2). Costos por escenario en `reports/load/costos_inferencia.csv` (#163).
 
 ## Datos base
 
-Datos base medidos con `docker stats` (escenario C con `SIN_LOCUST=1`, **sin carga**; se actualizan con las corridas de Locust):
+Picos por servicio medidos con `docker stats` durante las corridas de Locust A, B y C (`reports/load/docker_stats_picos.csv`, #162):
 
-| configuración | api | mlflow | nginx | total | instancia mínima |
+| configuración | api | mlflow | nginx | instancia mínima actual | USD / 1M inferencias |
 |---|---|---|---|---|---|
-| 1 réplica | 925 MiB | 1824 MiB | – | 2.7 GiB | t3.medium (0.0416 USD/h) |
-| 2 réplicas | 2330 MiB (~1.14 GiB c/u) | 1937 MiB | 4 MiB | 4.2 GiB | t3.large (0.0832 USD/h) |
+| 1 réplica | 1131–1159 MiB, 1.23–1.53 vCPU | 1835–1916 MiB, **CPU promedio 2.5–5 %** | – | t3.medium (B, C) / t3.large (A) | 0.53–1.55 |
+| 2 réplicas | 2066–2294 MiB, 1.51–3.21 vCPU | 1827–1932 MiB, CPU promedio 2.2–3.6 % | 6–9 MiB, ≤ 0.09 vCPU | t3.large (A) / t3.xlarge (B, C) | 1.28–2.00 |
 
 ## Optimizaciones
 
 | Optimización | Dato que la respalda | Ahorro estimado | Esfuerzo | Riesgo |
 |---|---|---|---|---|
-| **Sacar mlflow del host de inferencia** (right-sizing) | mlflow ocupa 1824 MiB (66 % de la pila), pero la api solo lo usa al arrancar: `lifespan` carga los 3 modelos `@champion` y después predice desde memoria. Sin mlflow, 1 réplica cabe en t3.small (0.9 GiB × 1.2 + 0.5 = 1.6 GiB ≤ 2 GiB) y 2 réplicas en t3.medium (2.3 × 1.2 + 0.5 = 3.2 GiB ≤ 4 GiB) | **50 %**: t3.medium → t3.small (0.0416 → 0.0208 USD/h); con 2 réplicas, t3.large → t3.medium (0.0832 → 0.0416 USD/h) | Medio: copiar los modelos a la imagen o a un volumen y dejar mlflow solo para entrenamiento y registro | Medio: actualizar un `@champion` exige reconstruir o reiniciar la api |
-| **Instancias spot** | t3.large spot ~0.0314 USD/h contra 0.0832 on-demand (us-east-1, 2026-11-19) | **~62 %** | Bajo: mismo despliegue | Alto: AWS puede reclamar la instancia con 2 min de aviso; solo sirve con otra instancia de respaldo |
-| **Instancias reservadas / Savings Plan (1 año)** | t3.small 0.0130 USD/h con Savings Plan contra 0.0208 on-demand | **~37 %** | Bajo: compra en consola | Bajo-medio: compromiso de pago por 1 año aunque no se use |
-| **Escalado horizontal vs. vertical** | 2 réplicas suman ~1.14 GiB por réplica y obligan a pasar de t3.medium a t3.large (+100 % de costo por hora). 2 × t3.medium y 1 × t3.large cuestan lo mismo (0.0832 USD/h) | Pendiente: solo conviene si el RPS sube más de 2× o el p95 baja con 2 réplicas (escenarios A/B/C) | Bajo: ya existe `docker-compose.scale.yml` | Bajo |
-| **Caché de modelos en el arranque** | La api tarda **45–53 s** en estar *healthy* tras `docker compose up` (3 corridas), de los cuales ~20 s son el arranque de mlflow y el resto la descarga de los modelos; `start_period` está en 90 s | Por medir: con los modelos en la imagen, cada réplica nueva atiende en segundos. En costo por hora es poco (45 s de t3.medium ≈ 0.0005 USD), pero acorta la reacción ante picos como el escenario C | Medio (el mismo cambio que sacar mlflow) | Bajo |
-| **Batching de predicciones** | Hoy cada endpoint predice 1 fila por petición (`pd.DataFrame([data.model_dump()])`) | Pendiente: medir RPS y costo por inferencia con un endpoint por lotes | Medio: endpoint nuevo y escenario de Locust | Bajo |
-| **Redis + worker RQ** (opcional) | — | Pendiente: solo se justifica si el escenario C muestra fallas o un p95 alto | Alto: 2 servicios nuevos | Medio: más piezas que operar |
+| **Sacar mlflow del host de inferencia** (right-sizing) | mlflow ocupa 1.8–1.9 GiB (~63 % de la memoria del host con 1 réplica) y bajo carga su CPU promedio es 2.5–5 %: la api solo lo usa al arrancar (`lifespan` carga los 3 modelos `@champion` y después predice desde memoria). Sin mlflow, 1 réplica cabe en t3.small: 1.13 GiB × 1.2 + 0.5 = 1.86 GiB ≤ 2 GiB y 1.53 vCPU × 1.2 = 1.84 ≤ 2 | **50 %** en B y C (t3.medium → t3.small; B: 0.56 → 0.28 USD / 1M); **75 %** en A (t3.large → t3.small; 1.55 → 0.39 USD / 1M) | Medio: copiar los modelos a la imagen o a un volumen y dejar mlflow solo para entrenamiento y registro | Medio: actualizar un `@champion` exige reconstruir o reiniciar la api |
+| **Escalado horizontal vs. vertical** | 2 réplicas en el mismo host bajan el p95 89 % en A (2300 → 260 ms) y 69 % en B (1300 → 400 ms), pero en B y C obligan a t3.xlarge y el costo por inferencia sube 3.2–3.6×. Escalar **verticalmente** no ayuda: con 1 réplica la api no pasa de 1.53 vCPU aunque el host tenía 8 núcleos (un solo proceso de uvicorn) | Escalar **horizontalmente en hosts chicos** (sin mlflow): 2 × t3.small (0.0416 USD/h) + ALB (~0.0225 USD/h) = ~0.064 USD/h contra t3.xlarge (0.1664 USD/h): **~62 %** menos para la configuración de 2 réplicas | Medio: requiere el cambio de mlflow y un balanceador administrado | Bajo-medio: más instancias que operar |
+| **Instancias spot** | t3.large spot ~0.0314 USD/h contra 0.0832 on-demand; mismo ~62 % en todos los escenarios (B, 1 réplica: 0.56 → 0.21 USD / 1M) | **~62 %** | Bajo: mismo despliegue | Alto: AWS puede reclamar la instancia con 2 min de aviso; usar solo para réplicas extra de pico |
+| **Instancias reservadas / Savings Plan (1 año)** | t3.small 0.0130 USD/h con Savings Plan contra 0.0208 on-demand | **~37 %** sobre la réplica base | Bajo: compra en consola | Bajo-medio: compromiso de pago por 1 año aunque no se use |
+| **Evitar el recargo por créditos de CPU de t3** | El CPU promedio del host fue 0.96–1.14 vCPU con 1 réplica, contra 0.4 vCPU de base en t3.medium. En modo *unlimited* el excedente cuesta 0.05 USD por vCPU-hora: con la carga de B continua, (1.05 − 0.4) × 0.05 = 0.033 USD/h | Evita hasta **+78 %** sobre el precio on-demand (0.0416 → 0.074 USD/h) si la carga es sostenida; con carga intermitente como A o C, t3 sigue conviniendo | Bajo: monitorear `CPUSurplusCreditsCharged` y, si la carga es continua, cambiar de familia | Bajo |
+| **Caché de modelos en el arranque** | La api tarda **45–53 s** en estar *healthy* tras `docker compose up` (3 corridas), de los cuales ~20 s son el arranque de mlflow y el resto la descarga de los modelos; `start_period` está en 90 s | En costo por hora es poco (45 s de t3.medium ≈ 0.0005 USD por arranque), pero cada réplica nueva atendería en segundos: importa en picos como C, donde el p95 llegó a 4.7 s | Medio (el mismo cambio que sacar mlflow) | Bajo |
+| **Batching de predicciones** | Hoy cada endpoint predice 1 fila por petición (`pd.DataFrame([data.model_dump()])`) | No medido: requiere un endpoint por lotes y un escenario de Locust que lo use | Medio | Bajo |
+| **Redis + worker RQ** (opcional) | En el pico C con 1 réplica no hubo fallas (0 %), pero el p95 fue 4.7 s y el sistema atendió 22.35 de ~50 RPS posibles: el cuello de botella es CPU de la api | **No se recomienda**: una cola no agrega capacidad de CPU, solo convierte la espera en asincronía, y suma 2 servicios. Escalar réplicas da −9 % de p95 y −54 % de mediana en C (2600 → 1200 ms) | Alto: 2 servicios nuevos y cambio del contrato de la api | Medio: más piezas que operar |
 
-**Prioridad recomendada:** primero sacar mlflow del host de inferencia, porque reduce el costo a la mitad sin tocar el modelo. Después Savings Plan para la carga base y spot solo para réplicas extra en picos.
+## Prioridad recomendada
+
+1. **Sacar mlflow del host de inferencia:** reduce el costo por inferencia 50–75 % sin tocar el modelo y es requisito de las demás.
+2. **Savings Plan** para la réplica base (−37 %) y vigilar el recargo por créditos de CPU si la carga es continua.
+3. **Escalar horizontalmente** con t3.small detrás de un balanceador solo cuando el p95 lo exija (en B pasa de 1.3 s a 0.4 s), usando **spot** (−62 %) para las réplicas de pico.
