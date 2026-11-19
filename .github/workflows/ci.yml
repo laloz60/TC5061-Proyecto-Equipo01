@@ -86,9 +86,7 @@ jobs:
           file: ./Dockerfile
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           load: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-          tags: |
-            mibici-api:latest
-            ghcr.io/laloz60/mibici-api:latest
+          tags: ghcr.io/laloz60/mibici-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
