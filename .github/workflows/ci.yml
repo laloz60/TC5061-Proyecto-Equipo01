@@ -106,18 +106,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Load cached image from GHA cache
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          load: true
-          tags: mibici-api:latest
-          cache-from: type=gha
-
-      - name: Start stack with Docker Compose (--wait)
-        run: docker compose up -d --wait
+      - name: Start stack with Docker Compose (--build --wait)
+        run: docker compose up -d --build --wait
 
       - name: Run API smoke tests (scripts/test_api.sh)
         run: |
@@ -129,6 +119,9 @@ jobs:
           echo "$output" | grep -q '"cluster_asignado"'
           echo "$output" | grep -q 'HTTP status: 422'
 
-      - name: Tear down Docker Compose stack
+      - name: Collect Compose diagnostics and tear down
         if: always()
-        run: docker compose down -v
+        run: |
+          docker compose ps -a || true
+          docker compose logs --tail=120 || true
+          docker compose down -v
