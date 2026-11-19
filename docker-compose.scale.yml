@@ -1,0 +1,33 @@
+# =============================================================================
+# Override para escalar la API a 2 replicas (issue #162, FinOps 1 vs N).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.scale.yml \
+#     up -d --wait --scale api=2
+#
+# El compose base publica "8000:8000" en la API, y dos replicas no pueden
+# usar el mismo puerto del host. Aqui la API deja de publicar puerto y un
+# nginx toma el 8000 y reparte las peticiones entre las replicas (Docker DNS
+# devuelve la IP de cada una). Locust y test_api.sh siguen usando :8000.
+# Memoria: 2 x 4g (api) + 3g (mlflow) -> Docker Desktop necesita ~11 GB.
+# =============================================================================
+services:
+  api:
+    ports: !reset []
+
+  lb:
+    image: nginx:1.27-alpine
+    ports:
+      - "8000:80"
+    volumes:
+      - ./docker/nginx-lb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      # nginx resuelve `api` al arrancar: las 2 replicas deben estar listas
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - mibici-net
