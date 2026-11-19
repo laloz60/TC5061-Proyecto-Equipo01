@@ -1,0 +1,3 @@
+# Dependencias para pruebas de carga con Locust (Issue #160).
+# Se mantiene separado de requirements-api.txt para no incluir herramientas de carga
+locust

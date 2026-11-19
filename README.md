@@ -606,6 +606,8 @@ El servicio consulta el Model Registry de MLflow mediante `MLFLOW_TRACKING_URI`.
 ├── LICENSE            <- Licencia open-source (MIT)
 ├── Makefile           <- Comandos de conveniencia (make data, make test, ...)
 ├── README.md          <- Este archivo
+├── requirements-load.txt <- Dependencias para pruebas
+├── locustfile.py         <- pruebas de carga
 ├── data
 │   ├── external       <- Datos de terceros
 │   ├── interim        <- Datos intermedios transformados
