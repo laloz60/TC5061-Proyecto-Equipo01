@@ -616,9 +616,10 @@ El servicio consulta el Model Registry de MLflow mediante `MLFLOW_TRACKING_URI`.
 
 - Qué hace:
   - Code Quality (Ruff): revisa formato (`ruff format --check`) y linting (`ruff check`) con Ruff `0.17.0` sobre Python `3.12`.
-  - Unit Tests (Pytest): instala dependencias desde `requirements.txt` y corre `pytest tests -v`.
+  - Unit Tests (Pytest): matriz de prueba en `ubuntu-latest` y `macos-latest` (`fail-fast: false`); instala dependencias desde `requirements.txt`, corre `pytest tests -v` y publica el resumen de cada sistema operativo en la página del run. La matriz no varía la versión de Python porque `pyproject.toml` fija `requires-python ~=3.12`.
   - Docker Build (Buildx Cache & GHCR): construye la imagen de la API desde `./Dockerfile`, usando caché de GitHub Actions (`type=gha`) y la publica en `ghcr.io` únicamente en `push` a `main`.
   - API Smoke Test (Docker Compose): levanta el stack con `docker compose up -d --build --wait` (con `MIBICI_MOCK_REGISTRY="1"`) y ejecuta `scripts/test_api.sh http://localhost:8000` verificando `/health`, P1 (`demanda_predicha_viajes`), P2 (`riesgo_desabasto_o_saturacion`), P3 (`cluster_asignado`) y payload inválido (`HTTP status: 422`), limpiando al final con `if: always()`.
+  - Pipeline Summary (Notificación): corre siempre (`if: always()`), escribe en `$GITHUB_STEP_SUMMARY` una tabla con el resultado de cada job y si la imagen se publicó, y deja una anotación `::notice` (pipeline en verde) o `::error` (con el job que falló) visible en el PR y en la pestaña *Checks*.
 - Triggers:
   - `push` en las ramas `main`, `feature/`, `fix/`, `chore/` y `docs/`.
   - `pull_request` hacia `main`
