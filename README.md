@@ -653,7 +653,7 @@ Con 1 réplica la instancia mínima actual es t3.medium (en B y C) o t3.large (e
 
 Mlflow consume 1827–1932 MiB con CPU promedio de 2.2–5% y la API solo lo usa al arrancar para cargar los 3 modelos @champion; separarlo permite bajar a t3.small con ahorros estimados de 50% en B y C (en B pasa de 0.56 a 0.28 USD / 1M) y 75% en A (1.55 a 0.39 USD / 1M).
 
-Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% en B (1300 - 400 ms), pero multiplican el costo por inferencia 3.2–3.6× en B y C; escalar horizontalmente con 2 × t3.small + ALB (~0.064 USD/h) cuesta ~62% menos que t3.xlarge (0.1664 USD/h). También se evalúan Spot, Savings Plan de 1 año, vigilar recargos por créditos de CPU en t3, caché de modelos en arranque, batching y descarte de Redis + worker RQ porque el cuello de botella es CPU de la API.
+Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% en B (1300 - 400 ms), pero multiplican el costo por inferencia 3.2–3.6× en B y C; escalar horizontalmente con 2 × t3.small + ALB (~0.072 USD/h, incluye ~1 LCU) cuesta ~57% menos que t3.xlarge (0.1664 USD/h). También se evalúan Spot, Savings Plan de 1 año, vigilar recargos por créditos de CPU en t3, caché de modelos en arranque, batching y descarte de Redis + worker RQ porque el cuello de botella es CPU de la API.
 
 ```
 ├── LICENSE            <- Licencia open-source (MIT)
