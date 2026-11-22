@@ -87,7 +87,7 @@ Si `pytest` falla con `assert 15376153 == 15376127` en `test_unified_parquet_exi
 
 ```bash
 python -m mibici.dataset --skip-download --force   # regenera el manifiesto local con tus datos (~1.5 min, sin volver a descargar)
-pytest                                             # ahora deben pasar las 67 pruebas
+pytest                                             # ahora deben pasar las 84 pruebas
 git restore data/manifest.json                     # no commitees el manifiesto regenerado
 ```
 
@@ -267,14 +267,15 @@ reports/figures/mlflow_evidencia/
 ## Pruebas de calidad y seguridad
 El proyecto incluye pruebas con `pytest`, validación de datos con `DeepChecks` y chequeos de seguridad (`bandit` + `pip-audit`).
 
-**Estructura de `tests/`** (7 archivos, 67 pruebas)
+**Estructura de `tests/`** (8 archivos, 84 pruebas)
 - `tests/test_data.py` (12): datos de MiBici, validación de SHA-256 e integridad del parquet unificado, comportamiento del CLI y parsing de fechas. Incluye casos límite: header malformado de 2023-04, literales nulos y formato de fecha desconocido.
 - `tests/test_features.py` (13): cálculo de features por estación y hora, lags, media móvil, calendario, split temporal y etiqueta de riesgo de P2. Cubre casos límite como horas sin viajes, estación que empieza en su primer viaje y llegadas fuera de la ventana. Incluye `test_sin_fuga_de_informacion`.
-- `tests/test_modeling.py` (14): fechas de `config`, hash del parquet, tags de MLflow, métricas de regresión, selección por validación, silhouette de P3 y perfil de ventana. Casos límite: silhouette con una sola fila (`NaN`) y ventana de perfil vacía.
+- `tests/test_modeling.py` (13): fechas de `config`, hash del parquet, tags de MLflow, métricas de regresión, selección por validación, silhouette de P3 y perfil de ventana. Casos límite: silhouette con una sola fila (`NaN`) y ventana de perfil vacía.
 - `tests/test_reproducibilidad.py` (3): dos entrenamientos con la misma semilla dan las mismas predicciones y métricas; con semilla distinta cambian (control negativo); Ridge es estable entre corridas.
 - `tests/test_register.py` (13): detección de modelo logueado, selección del mejor run por métrica de validación, fallback a corridas previas e idempotencia del registro con alias `@champion`.
 - `tests/test_proxy_riesgo.py` (11): construcción de la tabla de riesgo de P2, sensibilidad al umbral, top de estaciones y plots. Casos límite: estación sin desbalance, estación inexistente en nomenclatura y corte `n` exacto.
 - `tests/test_data_validation.py` (2): validación del esquema y de la corrida completa de DeepChecks (esta última corre solo con el entorno de validación creado).
+- `tests/test_ab_testing.py` (17): A/B testing de P2: métricas, selección de umbral por F1, prueba de McNemar, tabla comparativa V2 − V1, veredicto de promoción, sensibilidad modelo × umbral y flujo completo que registra la V2 sin mover `@champion`.
 
 **Comandos para ejecutar**
 Ya estando en el entorno virtual, es necesario ejecutar
@@ -291,23 +292,23 @@ cachedir: .pytest_cache
 rootdir: /Users/gerardocarreno/Documents/MaestriaTecMonterrey/CuartoTrimestre/MLOps/Semana_5/TC5061-Proyecto-Equipo01
 configfile: pyproject.toml
 plugins: platformdirs-4.13.3, anyio-4.15.1
-collecting ... collected 67 items
+collecting ... collected 84 items
 
 tests/test_data.py::test_catalog_cover_post_pandemic_history PASSED      [  1%]
 tests/test_data.py::test_normalize_columns_canonical_schema PASSED       [  2%]
 tests/test_data.py::test_normalize_columns_mangled_header_2023_04 PASSED [  4%]
 tests/test_data.py::test_unified_parquet_exists_and_is_non_empty PASSED  [  5%]
-tests/test_data.py::test_manifest_is_versioned_and_complete PASSED       [  7%]
-tests/test_data.py::test_output_paths_limit_escribe_aparte PASSED        [  8%]
+tests/test_data.py::test_manifest_is_versioned_and_complete PASSED       [  6%]
+tests/test_data.py::test_output_paths_limit_escribe_aparte PASSED        [  7%]
 ...
 tests/test_reproducibilidad.py::test_misma_semilla_repite_predicciones_y_metricas PASSED [ 97%]
 tests/test_reproducibilidad.py::test_semilla_distinta_cambia_el_entrenamiento PASSED [ 98%]
 tests/test_reproducibilidad.py::test_ridge_tambien_es_reproducible PASSED [100%]
 
-================== 67 passed, 1 warning in 20.54s ===================
+================== 84 passed, 41 warnings in 32.45s ===================
   ```
 
-> Para que las 67 corran hace falta el entorno de validación del punto 3 (`make validation_env`): sin él, `test_validacion_completa_con_deepchecks` se salta y el total queda en 66.
+> Para que las 84 corran hace falta el entorno de validación del punto 3 (`make validation_env`): sin él, `test_validacion_completa_con_deepchecks` se salta y el total queda en 83.
 
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\pytest`
 ![Pytest Success](reports/figures/evidencia_pruebas_calidad_seguridad/pytest.png)
@@ -625,10 +626,10 @@ El servicio consulta el Model Registry de MLflow mediante `MLFLOW_TRACKING_URI`.
 
 ### Prueba de carga
 
-Instala Locust:
+Instala Locust (dependencias de carga separadas de las de la API):
 
 ```bash
-pip install locust
+pip install -r requirements-load.txt
 ```
 
 Si ya lo tienes instalado, se puede correr Locust directamente 
@@ -717,7 +718,7 @@ Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% e
 
 | Integrante | GitHub | Responsabilidades |
 |------------|--------|-------------------|
-| Gerardo Lozano | [@laloz60](https://github.com/laloz60) | Infra e ingesta de datos, `features.py`, P1 baseline de regresión, README |
+| Gerardo Carreño García | [@laloz60](https://github.com/laloz60) | Infra e ingesta de datos, `features.py`, P1 baseline de regresión, README |
 | Gemma Martínez | [@GemmaMartinez](https://github.com/GemmaMartinez) | P2 — baseline de clasificación (#7), evidencia MLflow (#11) |
 | Jesús Tafolla | [@JesusTafolla](https://github.com/JesusTafolla) | Clustering P3 (#8), propuesta de modelos y métricas (#9) |
 | smuciton | [@smuciton](https://github.com/smuciton) | Definición de datos y condiciones de uso (#2), diagrama de arquitectura (#3), P2 — proxy de riesgo (#6) |
