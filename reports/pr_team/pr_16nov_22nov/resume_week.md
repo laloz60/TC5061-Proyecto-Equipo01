@@ -1,6 +1,6 @@
 # Resumen de PRs del equipo
 
-La tabla reúne los PRs del equipo del 15 al 21 de noviembre de 2026 y enlaza sus evidencias disponibles.
+La tabla reúne los PRs del equipo del 15 al 22 de noviembre de 2026 y enlaza sus evidencias disponibles. (16 de noviembre ASUETO)
 
 ## Resumen por integrante
 
@@ -8,8 +8,8 @@ La tabla reúne los PRs del equipo del 15 al 21 de noviembre de 2026 y enlaza su
 |---|---|---|
 | @JesusTafolla | #170 — Docker Compose; #171 — formato Ruff; #172 — issues 158, 159 y 167; #177 — corrección del tag de CI | #155 — revisión y comentario; #170 — aprobación y comentario; #171 — aprobación y comentario |
 | @laloz60 | #155 — entrega de Actividad 10; #170 — Docker Compose; #171 — formato Ruff | #172 — aprobación y comentario; #179 — aprobación y comentario; #180 y #181 — aprobación y comentario |
-| @smuciton | #173 — monitoreo con docker stats; #175 — optimizaciones FinOps; #174 — costo por inferencia; #178 — evidencias de carga | #154 — aprobación y comentario; #176 — aprobación y comentario; #177 — aprobación y comentario |
-| @GemmaMartinez | #154 — reportes de PRs y revisiones; #176 — pruebas de carga con Locust; #179 — escenarios de carga y gráficas; #180 y #181 — actualización del README | #155 — reporte de Actividad 10 (aprobó y comentó); #173 — docker stats (aprobó y comentó); #175 — FinOps (aprobó y comentó) |
+| @smuciton | #173 — monitoreo con docker stats; #175 — FinOps; #174 — costo por inferencia; #178 — evidencias de carga; #183 — costo por LCU del ALB | #154 — aprobación y comentario; #176 — aprobación y comentario; #177 — aprobación y comentario |
+| @GemmaMartinez | #154 — reportes de PRs y revisiones; #176 — pruebas de carga con Locust; #179 — escenarios de carga y gráficas; #180 y #181 — actualización del README | #155 — reporte de Actividad 10 (aprobó y comentó); #173 — docker stats (aprobó y comentó); #175 — FinOps (aprobó y comentó); #183 — revisión y aprobación |
 
 ## Resumen por PR
 
@@ -26,10 +26,11 @@ La tabla reúne los PRs del equipo del 15 al 21 de noviembre de 2026 y enlaza su
 | #177<br>`85f38ea` | fix(ci): elimina tag sin prefijo para evitar push a Docker Hub en main | @JesusTafolla | @smuciton | @smuciton | 19/11/2026 | 19/11/2026 | [PR_177.pdf](pdf/PR_177.pdf) | [pr_177.png](screenshot/pr_177.png) |
 | #179<br>`d95c46a` | Escenarios de carga y generar gráficas (Issue #161) | @GemmaMartinez | @laloz60 | @laloz60 | 19/11/2026 | 21/11/2026 | [PR_179.pdf](pdf/PR_179.pdf) | [pr_179.png](screenshot/pr_179.png) |
 | #180/#181<br>`2618a8f`<br>`2535c46` | docs: actualiza README con arranque, CI/CD, carga y FinOps (Issue #165); agrega `.github` en README | @GemmaMartinez | @laloz60 | @laloz60 | 21/11/2026 | 21/11/2026 | [PR_180.pdf](pdf/PR_180.pdf)<br>[PR_181.pdf](pdf/PR_181.pdf) | [pr_180.png](screenshot/pr_180.png)<br>[pr_181.png](screenshot/pr_181.png) |
-| #174 | feat(finops): estimación del costo por inferencia por escenario y réplicas | @smuciton | @GemmaMartinez | @GemmaMartinez | 19/11/2026 | Abierto | Se colocará al incluir el PR en la entrega siguiente | Se colocará al incluir el PR en la entrega siguiente |
-| #178 | docs(carga): evidencias de pruebas de carga, gráficas y capturas | @smuciton | @GemmaMartinez | @GemmaMartinez | 19/11/2026 | Abierto | Se colocará al incluir el PR en la entrega siguiente | Se colocará al incluir el PR en la entrega siguiente |
+| #174<br>`a6b168d` | feat(finops): estimación del costo por inferencia por escenario y réplicas | @smuciton | @GemmaMartinez | @GemmaMartinez | 19/11/2026 | 22/11/2026 | [PR_174.pdf](pdf/PR_174.pdf) | [pr_174.png](screenshot/pr_174.png) |
+| #178<br>`caaa309` | docs(carga): evidencias de pruebas de carga, gráficas y capturas | @smuciton | @GemmaMartinez | @GemmaMartinez | 19/11/2026 | 22/11/2026 | [PR_178.pdf](pdf/PR_178.pdf) | [pr_178.png](screenshot/pr_178.png) |
+| #183 | docs(finops): incluir costo por LCU del ALB en el escalado horizontal | @smuciton | @GemmaMartinez | @GemmaMartinez | 22/11/2026 | 22/11/2026 | [PR_183.pdf](pdf/PR_183.pdf) | [pr_183.png](screenshot/pr_183.png) |
 
-**Nota:** El PR en donde se sube esta info se hara visible hasta la siguiente semana
+**Nota:** El PR en donde se sube esta información se hará visible hasta la siguiente semana.
 
 ## Estructura de evidencias
 
