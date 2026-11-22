@@ -45,7 +45,7 @@ def leer_historial(ruta: Path) -> pd.DataFrame:
 def corridas(carpeta: Path, esc: str) -> list[tuple[str, pd.DataFrame]]:
     """Series a dibujar en el panel de un escenario."""
     rutas = [
-        ("1", carpeta / f"{esc}_stats_history.csv"),
+        ("1", carpeta / f"{esc}_1r_stats_history.csv"),
         ("2", carpeta / f"{esc}_2r_stats_history.csv"),
     ]
     if esc == "C":
