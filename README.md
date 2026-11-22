@@ -663,6 +663,9 @@ Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% e
 ├── docker-compose.yml    <- Orquestación de servicios con Docker     
 ├── docker-compose.scale.yml    <- Orquestación escalado a 2 réplicas    
 ├── requirements-load.txt     <- Dependencias para pruebas de carga
+├── .github/           <- Configuración y automatización de GitHub
+│   └── workflows/     <- Flujos de trabajo de GitHub
+│       └── ci.yml     <- Pipeline CI/CD
 ├── data
 │   ├── external       <- Datos de terceros
 │   ├── interim        <- Datos intermedios transformados
