@@ -9,6 +9,7 @@
 #   bash scripts/load_test.sh <A|B|C> [replicas]
 #     replicas: 1 (por defecto) o 2 -> agrega docker-compose.scale.yml
 #               (nginx como balanceador + 2 replicas de la API)
+#   Salidas de Locust: reports/load/<ESC>_<N>r_*.csv y locust_<ESC>_<N>r.html
 #
 # Variables opcionales:
 #   LOCUST_CMD   comando de Locust          (por defecto: locust)
@@ -34,7 +35,7 @@ case "$ESCENARIO" in
 esac
 
 case "$REPLICAS" in
-  1) COMPOSE=(docker compose -f docker-compose.yml); SUFIJO="" ;;
+  1) COMPOSE=(docker compose -f docker-compose.yml); SUFIJO="_1r" ;;
   2) COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.scale.yml); SUFIJO="_2r" ;;
   *) echo "replicas debe ser 1 o 2" >&2; exit 1 ;;
 esac
