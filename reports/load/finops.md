@@ -4,6 +4,7 @@
 - Proveedor de referencia: AWS EC2, región `us-east-1`, Linux, precios consultados el 2026-11-19 (compute.doit.com, calculator.holori.com).
 - Toda la pila (api + mlflow + nginx) corre en una sola instancia.
 - Recursos medidos con `docker stats` cada 2 s (`scripts/load_test.sh`); en docker stats 100 % de CPU = 1 vCPU. Las pruebas se corrieron en una laptop de 8 núcleos lógicos con Docker limitado a 5.8 GiB; se asume que 1 núcleo de la laptop equivale a 1 vCPU de EC2.
+- Datos: Locust de `reports/load/{A,B,C}_1r_stats.csv` y `{A,B,C}_2r_stats.csv`, de la **misma corrida** en la que se midió `docker_stats.csv`. Por eso no se usan `A/B/C_stats.csv` (corrida de #161, hecha en otro equipo sin `docker stats`): mezclar peticiones de una máquina con recursos de otra daría un costo sin sustento. Esa corrida tuvo menor latencia con 1 réplica (p95 de 81–310 ms contra 1300–4700 ms aquí), lo que confirma que los valores absolutos dependen del hardware. La comparación de 1 contra 2 réplicas solo vale dentro de un mismo equipo.
 - Pico del host = máximo de la suma de todos los contenedores en una misma muestra (no la suma de los picos de cada servicio, que no ocurren al mismo tiempo).
 - Instancia mínima: memoria pico × 1.2 + 0.5 GiB (SO y Docker) y vCPU pico × 1.2 deben caber en la instancia.
 - Locust usa usuarios en lazo cerrado con espera de 1–3 s entre peticiones: el RPS máximo teórico es ~usuarios / 2 s (25 RPS en A y B, 50 RPS en C).

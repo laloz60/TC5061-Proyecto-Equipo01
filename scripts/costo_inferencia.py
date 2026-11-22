@@ -2,7 +2,7 @@
 
 Cruza el pico SIMULTANEO de recursos del host (reports/load/docker_stats.csv,
 suma de todos los contenedores en cada muestra) con el resumen de Locust
-({ESC}[_2r]_stats.csv) y estima el costo por inferencia en AWS EC2
+({ESC}_{N}r_stats.csv) y estima el costo por inferencia en AWS EC2
 (us-east-1, Linux). Se usa el pico simultaneo y no la suma de los picos de
 cada servicio, porque esos picos no ocurren al mismo tiempo.
 
@@ -66,7 +66,7 @@ def main() -> None:
 
     filas = []
     for (esc, rep), pico in picos.iterrows():
-        ruta_locust = carpeta / f"{esc}{'_2r' if rep == 2 else ''}_stats.csv"
+        ruta_locust = carpeta / f"{esc}_{rep}r_stats.csv"
         if not ruta_locust.exists():
             print(f"Aviso: falta {ruta_locust}, se omite {esc} x{rep}")
             continue

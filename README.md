@@ -461,6 +461,18 @@ make check-all
 
 El servicio expone los modelos de Regresión (P1), Clasificación (P2) y Clustering (P3) del proyecto mediante una API REST construida con **FastAPI** y validación de las entradas y las salidas con **Pydantic**. Los modelos **no se incluyen en la imagen**: a través de la variable `MLFLOW_TRACKING_URI` el contenedor se conecta al servidor local de MLflow, carga los modelos en memoria RAM al iniciar y los sirve con el alias `@champion`, de modo que siempre se entrega la última versión sin reconstruir la imagen OCI.
 
+Para levantar el sistema
+
+```bash
+cp .env.example .env
+docker compose up -d
+bash scripts/test_api.sh
+```
+En un solo comando
+```bash
+cp .env.example .env && docker compose up -d && bash scripts/test_api.sh
+```
+
 ### Requisitos
 
 - Docker instalado y en ejecución (el `Dockerfile` es estándar OCI: funciona igual con Podman).
@@ -600,12 +612,60 @@ Se eligió inferencia en tiempo real mediante una API REST síncrona. Cada petic
 
 El servicio consulta el Model Registry de MLflow mediante `MLFLOW_TRACKING_URI`. Al iniciar, carga los modelos registrados con el alias `@champion`; por ello, actualizar el modelo en el registry y reiniciar el contenedor permite servir la nueva versión sin reconstruir la imagen.
 
-## Estructura del proyecto
+## CI/CD, Prueba de carga y Costo por inferencia
+
+- Qué hace:
+  - Code Quality (Ruff): revisa formato (`ruff format --check`) y linting (`ruff check`) con Ruff `0.17.0` sobre Python `3.12`.
+  - Unit Tests (Pytest): instala dependencias desde `requirements.txt` y corre `pytest tests -v`.
+  - Docker Build (Buildx Cache & GHCR): construye la imagen de la API desde `./Dockerfile`, usando caché de GitHub Actions (`type=gha`) y la publica en `ghcr.io` únicamente en `push` a `main`.
+  - API Smoke Test (Docker Compose): levanta el stack con `docker compose up -d --build --wait` (con `MIBICI_MOCK_REGISTRY="1"`) y ejecuta `scripts/test_api.sh http://localhost:8000` verificando `/health`, P1 (`demanda_predicha_viajes`), P2 (`riesgo_desabasto_o_saturacion`), P3 (`cluster_asignado`) y payload inválido (`HTTP status: 422`), limpiando al final con `if: always()`.
+- Triggers:
+  - `push` en las ramas `main`, `feature/`, `fix/`, `chore/` y `docs/`.
+  - `pull_request` hacia `main`
+
+### Prueba de carga
+
+Instala Locust:
+
+```bash
+pip install locust
+```
+
+Si ya lo tienes instalado, se puede correr Locust directamente 
+
+```bash
+locust -f locustfile.py --host http://localhost:8000
+```
+
+También se puede usar el script de pruebas de carga ya sea A, B o C de la réplica 1 o 2, levantando docker-compose.scale.yml con balanceo en nginx cuando son 2 réplicas y guardando métricas en `reports/load/`
+
+```bash
+## bash scripts/load_test.sh [Escenario] [Réplica]
+bash scripts/load_test.sh A 1
+```
+
+## Costo por inferencia
+El análisis de costos y optimizaciones en AWS EC2 está en `reports/load/finops.md` y `reports/load/costos_inferencia.csv`, con fórmula costo/inferencia = precio_hora * duracion_h / peticiones_exitosas. En docker stats 100 % = 1 vCPU completa. 
+
+Con evidencia en `reports/load/docker_stats.csv` (corridas ABC réplica 1 y 2) `reports/load/docker_stats_picos.csv` (picos por escenario y servicio) `reports/load/docker_stats` (En vivo del pico répica 1 y 2)
+
+Con 1 réplica la instancia mínima actual es t3.medium (en B y C) o t3.large (en A), con 0.53–1.55 USD por millón de inferencias; con 2 réplicas detrás de balanceador, que pasa a t3.large (A) o t3.xlarge (B y C), con 1.28–2.00 USD por millón de inferencias.
+
+Mlflow consume 1827–1932 MiB con CPU promedio de 2.2–5% y la API solo lo usa al arrancar para cargar los 3 modelos @champion; separarlo permite bajar a t3.small con ahorros estimados de 50% en B y C (en B pasa de 0.56 a 0.28 USD / 1M) y 75% en A (1.55 a 0.39 USD / 1M).
+
+Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% en B (1300 - 400 ms), pero multiplican el costo por inferencia 3.2–3.6× en B y C; escalar horizontalmente con 2 × t3.small + ALB (~0.064 USD/h) cuesta ~62% menos que t3.xlarge (0.1664 USD/h). También se evalúan Spot, Savings Plan de 1 año, vigilar recargos por créditos de CPU en t3, caché de modelos en arranque, batching y descarte de Redis + worker RQ porque el cuello de botella es CPU de la API.
 
 ```
 ├── LICENSE            <- Licencia open-source (MIT)
 ├── Makefile           <- Comandos de conveniencia (make data, make test, ...)
 ├── README.md          <- Este archivo
+├── locustfile.py         <- pruebas de carga   
+├── docker-compose.yml    <- Orquestación de servicios con Docker     
+├── docker-compose.scale.yml    <- Orquestación escalado a 2 réplicas    
+├── requirements-load.txt     <- Dependencias para pruebas de carga
+├── .github/           <- Configuración y automatización de GitHub
+│   └── workflows/     <- Flujos de trabajo de GitHub
+│       └── ci.yml     <- Pipeline CI/CD
 ├── data
 │   ├── external       <- Datos de terceros
 │   ├── interim        <- Datos intermedios transformados
@@ -621,11 +681,16 @@ El servicio consulta el Model Registry de MLflow mediante `MLFLOW_TRACKING_URI`.
 ├── references         <- Diccionarios de datos, ML Canvas, documentos de diseño
 ├── reports
 │   └── figures        <- Gráficas para el reporte (evidencia MLflow, etc.)
-├── reports
 │   └── evidencia_pruebas_calidad_seguridad  <- Capturas de pytest, deepchecks y seguridad
-│   └── pr_team       <- PR semanal│
+│   └── pr_team       <- PR semanal        
+│   └── load          <- Evidencias de carga, costos
 ├── requirements.txt   <- Dependencias fijadas (reproducibilidad)
-│
+├── scripts
+│   ├── costo_inferencia.py
+│   ├── load_test.sh          <- Prueba de carga / muestreo
+│   ├── resumen_stats.py      <- Resumen de picos
+│   ├── test_api.sh           <- Pruebas de humo de la API
+│   └── verificar_registry.py
 ├── mibici             <- Código fuente
 │   ├── config.py          <- Rutas, semilla, corte de datos y partición temporal
 │   ├── dataset.py         <- Ingesta: descarga → normalización → Parquet + manifiesto
