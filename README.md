@@ -393,7 +393,7 @@ python -m mibici.modeling.train p2 --model-name rf
 python -m mibici.modeling.train p3-search
 ```
 
-## Monitoreo, Drift y A/B Testing (Actividad 9)
+## Monitoreo, Drift y A/B Testing
 
 El proyecto incluye una capa de observabilidad para mantener vigentes los modelos: detecta cambios en los datos y evalúa nuevas versiones antes de promoverlas. El resultado integrado (drift, A/B y recomendación de Continuous Training) está en [`reports/reporte_actividad9.md`](reports/reporte_actividad9.md).
 
@@ -423,6 +423,10 @@ mlflow run . -e ab_test --env-manager=uv
 ```
 
 El entry point entrena y registra la V2, y después compara las dos versiones (`python -m mibici.modeling.ab_testing run`). Requiere el servidor de MLflow levantado y la V1 registrada con el alias `@champion`. Salida: `reports/ab_testing_p2.md`, `reports/ab_testing_p2.csv` y las gráficas en `reports/figures/ab_testing_p2/`.
+
+### 3. Gobernanza y Model Card
+
+La documentación consolidada de los tres modelos `@champion` (uso previsto, métricas de evaluación de P1/P2/P3, linaje con MLflow Model Registry, limitaciones y sesgos, política de drift/Continuous Training y perfil FinOps) se encuentra en [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
 
 ## Buenas prácticas
 
@@ -676,7 +680,9 @@ Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% e
 │   └── manifest.json  <- Versionado: totales + SHA-256 de cada archivo de datos
 │
 ├── docs               <- Proyecto mkdocs
-│   └── clean_doc.md   <- Documentación limpieza de datos
+│    ├── clean_doc.md   <- Documentación limpieza de datos
+│    └── MODEL_CARD.md  <- Model Card consolidado (P1, P2 y P3)
+│
 ├── models             <- Modelos entrenados y serializados
 ├── notebooks          <- Notebooks Jupyter (iniciales: <iniciales>-<descripción>)
 ├── pyproject.toml     <- Metadatos del paquete mibici + config de ruff
