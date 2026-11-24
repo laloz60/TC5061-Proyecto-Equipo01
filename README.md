@@ -51,7 +51,7 @@ pip install -r requirements.txt  # instala también el paquete mibici (-e .)
 
 ## Descarga de datos
 
-**Clon limpio (desde cero):** solo hace falta este comando. Descarga los 41 CSVs mensuales y la nomenclatura de estaciones (~1.2 GB) y los unifica en un Parquet:
+**Clon limpio (desde cero):** solo hace falta este comando. Descarga los 42 CSVs mensuales y la nomenclatura de estaciones (~1.2 GB) y los unifica en un Parquet:
 
 ```bash
 python -m mibici.dataset
