@@ -54,7 +54,7 @@ bash scripts/test_api.sh http://localhost:8000
 | `GET /health` | `{"status":"healthy","modelos_cargados":["p1","p2","p3"]}` | 200 |
 | `POST /predict/p1-demanda` | `{"demanda_predicha_viajes":5.6206…}` | 200 |
 | `POST /predict/p2-riesgo` | `{"riesgo_desabasto_o_saturacion":1,"probabilidad_riesgo":0.7449…}` | 200 |
-| `POST /predict/p3-clustering` | `{"cluster_asignado":2}` | 200 |
+| `POST /predict/p3-clustering` (perfil tipo oficina) | `{"cluster_asignado":1}` | 200 |
 | Payload inválido | Validación de Pydantic | 422 |
 
 También responden la documentación interactiva (`http://localhost:8000/docs`, 200) y la UI de MLflow (`http://localhost:5001`, 200).
@@ -68,14 +68,16 @@ Para mostrar que responde el modelo real (el registry simulado del CI devuelve v
 | Lunes 8:00, estación con alta demanda reciente (12 salidas en la última hora, saldo neto −6, capacidad 20) | **12.90 viajes** | **1 (0.9995)** |
 | Domingo 3:00, estación sin actividad | **0.00 viajes** | **0 (0.0281)** |
 
-P3 con perfiles horarios normalizados (proporción de viajes por hora, suma 1):
+P3 con el mismo perfil enviado como conteos de viajes y como proporciones (después de la corrección de la sección 6):
 
-| Perfil | Clúster |
-|---|---|
-| Oficina (picos 8 h y 18 h) | 1 |
-| Residencial (pico 7 h) | 1 |
-| Ocio (tarde-noche) | 2 |
-| Plano | 1 |
+| Perfil | Clúster con conteos | Clúster con proporciones |
+|---|---|---|
+| Oficina (picos 8 h y 18 h) | 1 | 1 |
+| Residencial (pico 7 h) | 1 | 1 |
+| Ocio (tarde-noche) | 2 | 2 |
+| Plano | 1 | 1 |
+| Todo en ceros | 422 | — |
+| Con un valor negativo | 422 | — |
 
 ## 5. Consumo de recursos en reposo (`docker stats`)
 
@@ -87,11 +89,16 @@ mibici-mlflow-1   2.34%     1.985GiB / 3GiB     66.18%
 
 Consistente con el análisis de FinOps (MLflow ~1.9 GiB, API ~1.1 GiB en reposo).
 
-## 6. Hallazgo: formato de entrada de P3
+## 6. Hallazgo y corrección: formato de entrada de P3
 
-El modelo de P3 se entrenó con **perfiles horarios normalizados** (cada fila suma 1; ver `_perfil_ventana` en `mibici/modeling/train.py`), pero la API recibe `perfil_horario` sin normalizar ni documentar ese formato. `scripts/test_api.sh` envía conteos (`[1, 2, …, 24]`), que quedan fuera de la distribución de entrenamiento: la petición responde 200, pero el clúster asignado no es interpretable. Con proporciones, el modelo sí distingue perfiles (sección 4).
+**Hallazgo.** El modelo de P3 se entrenó con **perfiles horarios normalizados** (cada fila suma 1; ver `_perfil_ventana` en `mibici/modeling/train.py`), pero la API pasaba `perfil_horario` al modelo tal cual. `scripts/test_api.sh` y `locustfile.py` enviaban conteos (`[1, 2, …, 24]`), fuera de la distribución de entrenamiento: la petición respondía 200, pero el clúster no era interpretable.
 
-Opciones: normalizar el perfil en `mibici/api/main.py` antes de predecir, o documentar en `mibici/api/schemas.py` que la entrada son proporciones y ajustar el ejemplo de `test_api.sh`.
+**Corrección** (evitar el sesgo entre entrenamiento y servicio, *training-serving skew*):
+- `mibici/api/schemas.py`: `ClusterInput` normaliza el perfil a proporciones con un validador de Pydantic. Acepta conteos o proporciones (un perfil ya normalizado no cambia) y rechaza con 422 los valores negativos o un perfil sin viajes. La descripción y el ejemplo aparecen en Swagger.
+- `tests/test_api_schemas.py`: 6 pruebas (normalización, conteos = proporciones, perfil ya normalizado sin cambios y 3 entradas inválidas).
+- `scripts/test_api.sh` y `locustfile.py`: el ejemplo de P3 es ahora un perfil realista de una estación tipo oficina.
+
+Con la corrección, los conteos y las proporciones del mismo perfil producen el mismo clúster (sección 4).
 
 ## 7. Apagado
 

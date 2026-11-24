@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ModelFeaturesInput(BaseModel):
@@ -26,7 +26,35 @@ class ModelFeaturesInput(BaseModel):
 
 
 class ClusterInput(BaseModel):
-    perfil_horario: list[float] = Field(..., min_length=24, max_length=24)
+    """Perfil horario de una estación para P3 (24 valores, de 0 a 23 h).
+
+    El modelo se entrenó con perfiles normalizados por fila (proporción de
+    viajes en cada hora, suma 1; ver `_perfil_ventana` en
+    `mibici/modeling/train.py`). Para repetir ese preprocesamiento al servir,
+    el validador normaliza la entrada: se aceptan conteos de viajes o
+    proporciones y ambos producen el mismo clúster.
+    """
+
+    perfil_horario: list[float] = Field(
+        ...,
+        min_length=24,
+        max_length=24,
+        description=(
+            "Viajes por hora (conteos o proporciones), de 0 a 23 h. "
+            "Valores no negativos con suma mayor que cero; se normalizan a proporciones."
+        ),
+        examples=[[0, 0, 0, 0, 0, 1, 4, 12, 20, 10, 6, 5, 6, 6, 5, 6, 9, 15, 18, 9, 5, 3, 1, 0]],
+    )
+
+    @field_validator("perfil_horario")
+    @classmethod
+    def normalizar_perfil(cls, perfil: list[float]) -> list[float]:
+        if any(valor < 0 for valor in perfil):
+            raise ValueError("el perfil horario no admite valores negativos")
+        total = sum(perfil)
+        if total <= 0:
+            raise ValueError("el perfil horario debe tener al menos un viaje (suma mayor que 0)")
+        return [valor / total for valor in perfil]
 
 
 class P1Response(BaseModel):

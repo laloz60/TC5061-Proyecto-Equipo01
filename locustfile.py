@@ -21,9 +21,9 @@ PAYLOAD_P1_P2 = {
     "latitud": 20.6597,
     "longitud": -103.3496,}
 
-# Payload P3
+# Payload P3: viajes por hora de una estación tipo oficina (la API lo normaliza)
 PAYLOAD_P3 = {
-    "perfil_horario": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],}
+    "perfil_horario": [0, 0, 0, 0, 0, 1, 4, 12, 20, 10, 6, 5, 6, 6, 5, 6, 9, 15, 18, 9, 5, 3, 1, 0],}
 
 
 class MiBiciUsuario(HttpUser):
