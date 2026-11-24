@@ -73,3 +73,16 @@ entry_points:
     command: >
       python -m mibici.mlflow_entry ab_test
       --features-path {features_path}
+
+  continuous_training:
+    parameters:
+      drift_report: {type: path, default: "reports/drift_report.json"}
+      model_name: {type: string, default: "mibici-equipo01-p2-riesgo"}
+      metric: {type: string, default: "val_roc_auc"}
+      force_retrain: {type: string, default: "false"}
+    command: >-
+      python -m mibici.modeling.continuous_training
+      --drift-report {drift_report}
+      --model-name {model_name}
+      --metric {metric}
+      --force-retrain {force_retrain}
