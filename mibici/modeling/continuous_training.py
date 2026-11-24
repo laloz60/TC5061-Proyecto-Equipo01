@@ -12,12 +12,13 @@ Flujo:
 from __future__ import annotations
 
 import argparse
-import json
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any
 
 import mlflow
+from mlflow.exceptions import MlflowException
 from mlflow.tracking import MlflowClient
 
 
@@ -80,7 +81,7 @@ def obtener_champion_actual(
     """Obtiene la versión actual @champion y su métrica de validación desde el Registry."""
     try:
         mv = client.get_model_version_by_alias(model_name, "champion")
-    except Exception:
+    except MlflowException:
         return None, None
 
     # 1. Busca primero en tags de la versión (alineado con Issue #191)
