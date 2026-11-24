@@ -125,8 +125,10 @@ Evaluado sobre **4,231,300 filas** del split `test` (`2025-07-01` a `2026-09-30`
 
 * **Monitoreo de drift:** Ejecutado con **Evidently** (`mlflow run . -e drift --env-manager=uv`), comparando muestras reproducibles de `30,000` filas (`seed=42`) entre referencia (`2023-05-01` a `2024-12-31`) y actual (`2025-01-01` a `2026-10-31`).
 * **Hallazgo vigente:** **4 de 21 variables (19%)** superaron el umbral individual (`0.10`): `mes` (`0.337`), `estacion_id` (`0.255`), `neto_media_7d` (`0.133`) y `salidas_media_7d` (`0.118`). Al no alcanzar el umbral global del `50%`, no existe drift a nivel dataset.
-* **Política de Continuous Training (CT):** No se dispara reentrenamiento automático ante *covariate shift* localizado. La activación de CT y promoción de `@champion` requiere: (1) drift global a nivel dataset (`e50%` de columnas) o degradación sostenida en métricas con etiquetas recientes, (2) reentrenamiento reproducible con ventana extendida, y (3) verificación de mejora en la misma métrica de validación (`val_*`) frente al `@champion` vigente antes de mover el alias.
-
+* **Política automatizada de Continuous Training (`mlflow run . -e continuous_training`):**
+  1. **Disparador:** Lee `reports/drift_report.json` generado por Evidently; solo dispara reentrenamiento cuando `dataset_drift == true` (al menos `50%` de las variables superan el umbral individual de `0.10`) o bajo ejecución controlada con `force_retrain=true`.
+  2. **Reentrenamiento y versionado:** Entrena el modelo candidato con la ventana temporal extendida (`train + val`) y lo registra como una nueva versión en `mibici-equipo01-p2-riesgo` con su linaje (run, commit y hashes de datos), inicialmente con tag `stage=evaluation`.
+  3. **Regla de promoción:** Compara el candidato contra `@champion` usando la misma métrica de validación (`val_roc_auc`). El alias `@champion` (y el tag `stage=production`) solo se mueve si el candidato supera estrictamente al vigente; en caso contrario se conserva el modelo en producción sin cambios.
 ---
 
 ## 7. Operación, Seguridad y FinOps
