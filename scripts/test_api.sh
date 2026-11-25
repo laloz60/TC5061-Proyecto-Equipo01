@@ -47,9 +47,11 @@ curl -sS -m 30 -X POST "${BASE_URL}/predict/p2-riesgo" \
 echo
 
 echo "== 4. Prediccion P3 (POST /predict/p3-clustering) =="
+# Viajes por hora de una estación tipo oficina (picos a las 8 y 18 h).
+# La API normaliza el perfil a proporciones, como en el entrenamiento.
 curl -sS -m 30 -X POST "${BASE_URL}/predict/p3-clustering" \
   -H "Content-Type: application/json" \
-  -d '{"perfil_horario": [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]}' \
+  -d '{"perfil_horario": [0,0,0,0,0,1,4,12,20,10,6,5,6,6,5,6,9,15,18,9,5,3,1,0]}' \
   -w "\nHTTP status: %{http_code}\n"
 echo
 
