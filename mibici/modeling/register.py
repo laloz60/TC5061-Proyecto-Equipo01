@@ -23,7 +23,7 @@ _MODELOS = {
 # estado de cada version en el registry (tag "stage")
 STAGE_PRODUCCION = "production"
 STAGE_ARCHIVADO = "archived"
-STAGE_EVALUACION = "evaluacion"
+STAGE_EVALUACION = "evaluation"  # mismo valor que continuous_training.py y el Model Card
 
 ALIAS_CHAMPION = "champion"
 ALIAS_AB = "ab-candidate"

@@ -283,7 +283,7 @@ def test_registrar_marca_ab_candidate_como_evaluacion(tracking_tmp):
     register._registrar("p1")
     ab = cliente.get_model_version_by_alias(NOMBRE_P1, "ab-candidate")
     assert str(ab.version) == str(version_ab)  # el alias no se mueve
-    assert ab.tags["stage"] == "evaluacion"
+    assert ab.tags["stage"] == "evaluation"
     assert "No esta en produccion" in ab.description
     champion = cliente.get_model_version_by_alias(NOMBRE_P1, "champion")
     assert str(champion.version) != str(version_ab)
