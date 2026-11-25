@@ -100,7 +100,56 @@ Consistente con el análisis de FinOps (MLflow ~1.9 GiB, API ~1.1 GiB en reposo)
 
 Con la corrección, los conteos y las proporciones del mismo perfil producen el mismo clúster (sección 4).
 
-## 7. Apagado
+## 7. Re-verificación (2026-11-24, `main` @ `b358908`)
+
+Corrida de confirmación tras el merge del PR #203, con el registry real y las imágenes reconstruidas:
+
+| Dato | Valor |
+|---|---|
+| Commit | `b358908` (`main`) |
+| Comando | `docker compose up -d --build --wait` (con build de las dos imágenes) |
+| Tiempo total de arranque en frío | **75 s** (incluye `docker build`; sin rebuild fue 13 s el23/11) |
+| Estado final | `mibici-api-1` y `mibici-mlflow-1` **healthy** |
+| Registry | `MIBICI_MOCK_REGISTRY=0` → `mlflow.db` y `mlruns/` del equipo |
+
+`docker compose ps`:
+
+```
+NAME              STATUS                    PORTS
+mibici-api-1      Up (healthy)              0.0.0.0:8000->8000/tcp
+mibici-mlflow-1   Up (healthy)              0.0.0.0:5001->5000/tcp
+```
+
+Aliases en el Model Registry (los 3 modelos con estado de producción explícito):
+
+| Modelo | Versión `@champion` | Otros aliases |
+|---|---|---|
+| `mibici-equipo01-p1-demanda` | v2 | — |
+| `mibici-equipo01-p2-riesgo` | v2 | v4 → `ab-candidate` (A/B, en evaluación) |
+| `mibici-equipo01-p3-grupos` | v2 | — |
+
+`bash scripts/test_api.sh http://localhost:8000` — **5/5 pruebas en verde**:
+
+| Prueba | Respuesta | HTTP |
+|---|---|---|
+| `GET /health` | `{"status":"healthy","modelos_cargados":["p1","p2","p3"]}` | 200 |
+| `POST /predict/p1-demanda` | `{"demanda_predicha_viajes":5.620645371371251}` | 200 |
+| `POST /predict/p2-riesgo` | `{"riesgo_desabasto_o_saturacion":1,"probabilidad_riesgo":0.7448901989148815}` | 200 |
+| `POST /predict/p3-clustering` | `{"cluster_asignado":1}` | 200 |
+| Payload inválido | validación Pydantic | 422 |
+
+Swagger (`http://localhost:8000/docs`, HTTP 200) sirve los 4 endpoints declarados en `/openapi.json`:
+
+```
+GET  /health              - Health Check
+POST /predict/p1-demanda  - Predict P1
+POST /predict/p2-riesgo   - Predict P2
+POST /predict/p3-clustering - Predict P3
+```
+
+> **Pendiente de actualizar** cuando el compañero termine sus cambios (issue #191: linaje `val_*` en el Registry): repetir esta sección tras su merge, porque puede cambiar la versión `@champion` y obligar a repetir la verificación.
+
+## 8. Apagado
 
 ```bash
 docker compose down     # mlflow.db y mlruns/ quedan en el host
