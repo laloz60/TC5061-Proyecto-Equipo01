@@ -204,7 +204,7 @@ La comparación de baseline contra candidato de cada pregunta está en [`reports
   | Tag `stage` | Alias | Significado |
   |---|---|---|
   | `production` | `@champion` | La versión que sirve la API. Lleva también `pregunta`, `metrica_seleccion` y `valor_metrica`. |
-  | `evaluacion` | `@ab-candidate` | Retador del A/B test de P2 (ver [Monitoreo](#monitoreo-drift-y-ab-testing-actividad-9)); no sirve tráfico. |
+  | `evaluation` | `@ab-candidate` | Retador del A/B test de P2 (ver [Monitoreo](#monitoreo-drift-y-ab-testing-actividad-9)); no sirve tráfico. |
   | `archived` | — | Versión que dejó de ser `@champion`; se conserva como historial. |
 
 - **Ciclo de vida:** la versión en producción se marca con el alias `@champion` y se carga por nombre:
@@ -420,7 +420,7 @@ De cada periodo se toman 30,000 filas con `config.SEED` para que el reporte quep
 mlflow run . -e drift --env-manager=uv
 ```
 
-Salida: `reports/drift_report.html` (reporte interactivo) y `reports/drift_report.json` (métricas por variable).
+Salida: [`reports/drift_report.html`](reports/drift_report.html) (reporte interactivo) y [`reports/drift_report.json`](reports/drift_report.json) (métricas por variable).
 
 ### 2. A/B Testing del modelo P2 (Riesgo)
 
@@ -432,7 +432,9 @@ Las dos versiones se evalúan sobre **el mismo conjunto**: el split `test` (2025
 mlflow run . -e ab_test --env-manager=uv
 ```
 
-El entry point entrena y registra la V2, y después compara las dos versiones (`python -m mibici.modeling.ab_testing run`). Requiere el servidor de MLflow levantado y la V1 registrada con el alias `@champion`. Salida: `reports/ab_testing_p2.md`, `reports/ab_testing_p2.csv` y las gráficas en `reports/figures/ab_testing_p2/`.
+El entry point entrena y registra la V2, y después compara las dos versiones (`python -m mibici.modeling.ab_testing run`). Requiere el servidor de MLflow levantado y la V1 registrada con el alias `@champion`. Salida: [`reports/ab_testing_p2.md`](reports/ab_testing_p2.md), [`reports/ab_testing_p2.csv`](reports/ab_testing_p2.csv) y las gráficas en [`reports/figures/ab_testing_p2/`](reports/figures/ab_testing_p2/).
+
+> **No re-ejecutar `-e ab_test` sin acordarlo:** entrena y registra otra versión de P2 y mueve `@ab-candidate`. Los reportes versionados corresponden a la corrida documentada en [`reports/reporte_actividad9.md`](reports/reporte_actividad9.md).
 
 ### 3. Gobernanza y Model Card
 
