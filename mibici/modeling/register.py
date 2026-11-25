@@ -1,4 +1,4 @@
-"""Registra los modelos candidatos de P1/P2/P3 en el Model Registry (issue #70)."""
+"""Registra los modelos candidatos de P1/P2/P3 en el Model Registry (issues #70 y #191)."""
 
 from __future__ import annotations
 
@@ -19,6 +19,21 @@ _MODELOS = {
     "p2": ("mibici-equipo01-p2-riesgo", "val_roc_auc", "DESC"),
     "p3": ("mibici-equipo01-p3-grupos", "val_silhouette_score", "DESC"),
 }
+
+# estado de cada version en el registry (tag "stage")
+STAGE_PRODUCCION = "production"
+STAGE_ARCHIVADO = "archived"
+STAGE_EVALUACION = "evaluacion"
+
+ALIAS_CHAMPION = "champion"
+ALIAS_AB = "ab-candidate"
+
+_DESCRIPCION_AB = (
+    "Version en evaluacion (alias @ab-candidate): retador del A/B test de P2, "
+    "reentrenado con la ventana 2023-05 a 2025-06. No esta en produccion: la API "
+    "sirve @champion. Resultados y decision en reports/ab_testing_p2.md y "
+    "reports/reporte_actividad9.md."
+)
 
 
 def _run_tiene_modelo(cliente: MlflowClient, run_id: str, logueados: set[str]) -> bool:
@@ -72,6 +87,34 @@ def _descripcion(run, metrica: str) -> str:
     )
 
 
+def _tags_produccion(pregunta: str, metrica: str, valor: float) -> dict[str, str]:
+    """Tags del estado de produccion: pregunta, metrica de seleccion y su valor."""
+    return {
+        "stage": STAGE_PRODUCCION,
+        "pregunta": pregunta.upper(),
+        "metrica_seleccion": metrica,
+        "valor_metrica": f"{valor:.4f}",
+    }
+
+
+def _version_por_alias(cliente: MlflowClient, nombre: str, alias: str):
+    """Version que apunta el alias, o None si el alias no existe."""
+    try:
+        return cliente.get_model_version_by_alias(nombre, alias)
+    except MlflowException:
+        return None
+
+
+def _marcar_ab_candidate(cliente: MlflowClient, nombre: str) -> None:
+    """Deja explicito que la version @ab-candidate esta en evaluacion, no en produccion."""
+    version = _version_por_alias(cliente, nombre, ALIAS_AB)
+    if version is None:
+        return
+    cliente.set_model_version_tag(nombre, version.version, "stage", STAGE_EVALUACION)
+    cliente.update_model_version(nombre, version.version, description=_DESCRIPCION_AB)
+    logger.info(f"{nombre} v{version.version} (@{ALIAS_AB}) marcado como {STAGE_EVALUACION}")
+
+
 def _registrar(pregunta: str) -> None:
     nombre, metrica, orden = _MODELOS[pregunta]
     cliente = MlflowClient()
@@ -81,20 +124,31 @@ def _registrar(pregunta: str) -> None:
             f"No hay runs con modelo logueable para {pregunta.upper()} en {EXPERIMENT_NAME!r}."
         )
 
+    anterior = _version_por_alias(cliente, nombre, ALIAS_CHAMPION)
     existentes = cliente.search_model_versions(f"name='{nombre}'")
-    if any(v.run_id == run.info.run_id for v in existentes):
-        logger.info(f"{nombre} ya esta registrado desde este run; se omite.")
-        return
+    ya_registrada = next((v for v in existentes if v.run_id == run.info.run_id), None)
 
-    version = mlflow.register_model(f"runs:/{run.info.run_id}/model", nombre)
+    if ya_registrada is None:
+        version = str(mlflow.register_model(f"runs:/{run.info.run_id}/model", nombre).version)
+    else:
+        # no se duplica la version, pero se completan descripcion, tags y alias
+        version = str(ya_registrada.version)
+        logger.info(f"{nombre} ya esta registrado desde este run (v{version}); se actualiza.")
+
     descripcion = _descripcion(run, metrica)
+    valor = run.data.metrics.get(metrica)
     cliente.update_registered_model(nombre, description=descripcion)
-    cliente.update_model_version(nombre, version.version, description=descripcion)
-    cliente.set_registered_model_alias(nombre, "champion", str(version.version))
-    logger.success(
-        f"{nombre} v{version.version} <- {run.info.run_name} "
-        f"({metrica}={run.data.metrics.get(metrica):.4f})"
-    )
+    cliente.update_model_version(nombre, version, description=descripcion)
+    for clave, texto in _tags_produccion(pregunta, metrica, valor).items():
+        cliente.set_model_version_tag(nombre, version, clave, texto)
+    cliente.set_registered_model_alias(nombre, ALIAS_CHAMPION, version)
+
+    if anterior is not None and str(anterior.version) != version:
+        cliente.set_model_version_tag(nombre, anterior.version, "stage", STAGE_ARCHIVADO)
+        logger.info(f"{nombre} v{anterior.version} deja @{ALIAS_CHAMPION}: {STAGE_ARCHIVADO}")
+
+    _marcar_ab_candidate(cliente, nombre)
+    logger.success(f"{nombre} v{version} <- {run.info.run_name} ({metrica}={valor:.4f})")
 
 
 @app.command()
