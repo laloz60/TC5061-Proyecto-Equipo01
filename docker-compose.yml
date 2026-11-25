@@ -47,7 +47,10 @@ services:
       # Proteccion DNS-rebinding: el hostname del contenedor (`mlflow`) no es
       # localhost ni una IP privada, asi que sin esta lista la API recibiria
       # "403 Invalid Host header" en cada consulta al registry.
-      MLFLOW_SERVER_ALLOWED_HOSTS: "localhost:5000,127.0.0.1:5000,mlflow:5000,host.docker.internal:5000"
+      # El 5001 es el puerto PUBLICADO en el host (ver `ports`): sin el
+      # localhost:5001 en la lista, el navegador que abre http://localhost:5001
+      # recibe 403 "Invalid Host header" y no se puede ver la UI del registry.
+      MLFLOW_SERVER_ALLOWED_HOSTS: "localhost:5000,127.0.0.1:5000,localhost:5001,127.0.0.1:5001,mlflow:5000,host.docker.internal:5000"
     volumes:
       # Bind mounts (no copias): el Model Registry y los 1.3 GB de artefactos
       # viven en el host y sobreviven a `docker compose down`.
