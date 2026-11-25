@@ -165,6 +165,16 @@ def test_mejor_run_cae_a_las_corridas_previas_si_no_hay_candidato(tracking_tmp):
     assert run.info.run_id == padre
 
 
+def test_mejor_run_ignora_runs_sin_la_metrica_de_validacion(tracking_tmp):
+    # caso real de P3: candidatos viejos con modelo pero sin val_*; no deben ganar
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    _crear_run("P3", "candidate", "test_silhouette_score", 0.20)
+    con_val = _crear_run("P3", "previo", "val_silhouette_score", 0.33)
+
+    run = _mejor_run_con_modelo(MlflowClient(), "p3", "val_silhouette_score", "DESC")
+    assert run.info.run_id == con_val
+
+
 def test_mejor_run_sin_experimento_lanza_error_claro(tracking_tmp):
     # backend vacio: el error debe ser accionable, no un None silencioso
     with pytest.raises(typer.BadParameter, match="No existe el experimento"):

@@ -67,6 +67,10 @@ def _mejor_run_con_modelo(cliente: MlflowClient, pregunta: str, metrica: str, or
             [experimento.experiment_id], filter_string=filtro, order_by=ordenado
         )
         for run in runs:
+            # sin la metrica de validacion el run no es comparable: se omite
+            # (p. ej. candidatos entrenados antes de que existieran las val_*)
+            if metrica not in run.data.metrics:
+                continue
             if _run_tiene_modelo(cliente, run.info.run_id, logueados):
                 return run
     return None
