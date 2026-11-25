@@ -45,7 +45,10 @@ bash scripts/test_api.sh http://localhost:8000   # 5/5 en verde (ensayo previo)
 ```bash
 docker compose ps                                  # ¿healthy?
 curl -s localhost:8000/health                      # {"status":"healthy",...}
+curl -s -o /dev/null -w "%{http_code}\n" localhost:5001/   # 200 (si da 403, falta el fix de ALLOWED_HOSTS)
 ```
+
+> El bloque 4 depende de la UI de MLflow en `localhost:5001`. Si responde **403** (`Invalid Host header`), el `MLFLOW_SERVER_ALLOWED_HOSTS` de `docker-compose.yml` no incluye el 5001: corregirlo y `docker compose up -d mlflow` (ver hallazgo A de `reports/api/evidencia_despliegue_final.md`).
 
 ---
 
