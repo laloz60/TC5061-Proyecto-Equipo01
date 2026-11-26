@@ -9,6 +9,28 @@
 
 Regresión, clasificación y clustering sobre los viajes del sistema de bicicleta pública de Guadalajara (MiBici), con ingesta reproducible, partición temporal sin fuga y experimentos registrados en MLflow.
 
+## Índice
+
+- [Preguntas de investigación](#preguntas-de-investigación)
+- [Datos](#datos)
+- [Requisitos](#requisitos)
+- [Instalación](#instalación)
+- [Descarga de datos](#descarga-de-datos)
+- [Features (P1 y P2)](#features-p1-y-p2)
+- [P2 (Clasificación)](#p2-clasificación)
+- [Experimentos (MLflow)](#experimentos-mlflow)
+- [Arquitectura de extremo a extremo](#arquitectura-de-extremo-a-extremo)
+- [Mapa de rúbrica](#mapa-de-rúbrica)
+- [Pruebas de calidad y seguridad](#pruebas-de-calidad-y-seguridad)
+- [Monitoreo, Drift y A/B Testing](#monitoreo-drift-y-ab-testing)
+- [Buenas prácticas](#buenas-prácticas)
+- [Despliegue de modelos (API REST con Docker)](#despliegue-de-modelos-api-rest-con-docker)
+- [CI/CD, prueba de carga y costo por inferencia](#cicd-prueba-de-carga-y-costo-por-inferencia)
+- [Entrega Final](#entrega-final)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Flujo de trabajo Git](#flujo-de-trabajo-git)
+- [Integrantes y responsabilidades](#integrantes-y-responsabilidades)
+
 ## Preguntas de investigación
 
 |    | Pregunta | Tarea | Responsable |
@@ -23,7 +45,7 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 
 - **Fuente:** [datos abiertos de MiBici](https://mibici.net/es/datos-abiertos) — CSVs mensuales de viajes + nomenclatura de estaciones.
 - **Cobertura:** 2023-05 a 2026-10 (**42 meses**, corte postpandemia decidido por el equipo: fin de la emergencia sanitaria COVID-19, mayo 2023) → **16,011,659 viajes** y **470 estaciones**.
-- **Lo que se versiona en Git:** solo `data/manifest.json` (hash SHA-256 de cada CSV, del Parquet unificado y de la nomenclatura). Los CSVs (~1.2 GB) y el Parquet (~330 MB) **no se suben al repositorio**; se regeneran con la ingesta y el manifiesto garantiza que sean idénticos.
+- **Versionado:** solo `data/manifest.json` (hash SHA-256 de cada CSV, del Parquet unificado y de la nomenclatura). Los CSVs (~1.2 GB) y el Parquet (~330 MB) **no se suben al repositorio**; se regeneran con la ingesta y el manifiesto garantiza que sean idénticos.
 - **Partición temporal sin fuga** (definida en `mibici/config.py`, nunca se mezclan meses futuros con el entrenamiento):
 
 | Split  | Rango |
@@ -37,6 +59,7 @@ Regresión, clasificación y clustering sobre los viajes del sistema de biciclet
 - Python 3.12
 - ~2 GB de espacio libre (CSVs + Parquet)
 - [uv](https://docs.astral.sh/uv/getting-started/installation/): `mlflow run` lo usa para crear el entorno del `python_env.yaml` (Python 3.12.9 con versiones fijadas). Sin uv, MLflow necesita pyenv y falla con `'None' install 3.12.9`.
+- Docker en ejecución para desplegar la API y MLflow mediante Compose.
 - **Windows:** activar el *Modo de programador* (Configuración → Actualización y seguridad → Para programadores). `mlflow run` crea symlinks al instalar dependencias; sin ese permiso falla con `WinError 1314`.
 
 ## Instalación
@@ -190,11 +213,12 @@ La comparación de baseline contra candidato de cada pregunta está en [`reports
 
 `mlflow run . -e register` (`mibici/modeling/register.py`) registra el mejor run de cada pregunta según su métrica de **validación** (la selección no mira test; esa ventana queda solo para el reporte final):
 
-| Pregunta | Modelo registrado | Métrica de selección |
-|---|---|---|
-| P1 | `mibici-equipo01-p1-demanda` | `val_mae` (menor es mejor) |
-| P2 | `mibici-equipo01-p2-riesgo` | `val_roc_auc` (mayor es mejor) |
-| P3 | `mibici-equipo01-p3-grupos` | `val_silhouette_score` (mayor es mejor) |
+| Pregunta | Modelo | Versión y alias | Run de origen | Métrica de selección |
+|---|---|---|---|---|
+| P1 | `mibici-equipo01-p1-demanda` | v2 `@champion` | `p1-candidate-rf-n200` (`c8ccdd71…`) | `val_mae = 0.8075` |
+| P2 | `mibici-equipo01-p2-riesgo` | v2 `@champion` | `P2-parent-search-logreg`, C=0.1 (`1cd16f9f…`) | `val_roc_auc = 0.8292` |
+| P3 | `mibici-equipo01-p3-grupos` | v2 `@champion` | `p3-candidate-k3` (`398be41f…`) | `val_silhouette_score = 0.4026` |
+
 
 - Busca primero entre las corridas con tag `stage_of_work=candidate`; si ninguna tiene modelo logueado, usa todas las corridas de la pregunta. Las corridas sin la métrica de validación se omiten, porque no son comparables.
 - Cada versión lleva en su descripción el linaje: run de origen, commit y hashes del manifiesto y del Parquet.
@@ -214,9 +238,20 @@ La comparación de baseline contra candidato de cada pregunta está en [`reports
   modelo = mlflow.pyfunc.load_model("models:/mibici-equipo01-p2-riesgo@champion")
   ```
 
+P2 v4 tiene el alias `@ab-candidate` y el tag `stage=evaluation`; no sirve tráfico de producción. Las versiones `@champion` tienen `stage=production` y los tags `pregunta`, `metrica_seleccion` y `valor_metrica`.
+
+`mlflow.db` no se versiona, así que las versiones y tags corresponden al Registry real verificado, no a una base SQLite que se descargue con el repositorio. Para comprobar un Registry local:
+
+```bash
+python scripts/verificar_registry.py
+sqlite3 mlflow.db "SELECT name, version, key, value FROM model_version_tags ORDER BY name, version;"
+```
+
+La evidencia de la corrida y sus verificaciones está en [`reports/registry_issue191.md`](reports/registry_issue191.md).
+
 #### Ubicación del registry y modelos desplegados
 
-El Model Registry vive en la **máquina anfitriona**: los metadatos en `mlflow.db` (SQLite) y los artefactos en `mlruns/`, servidos por el servidor MLflow del puerto 5000. La API **no lleva modelos dentro de la imagen**: al arrancar, se conecta a ese servidor con `MLFLOW_TRACKING_URI` y carga los tres modelos `@champion`. Para publicar una versión nueva basta con mover el alias en el registry y reiniciar el contenedor, sin reconstruir la imagen.
+El Registry guarda sus metadatos en `mlflow.db` y los artefactos en `mlruns/`; ninguno de los dos se versiona. En Docker Compose, MLflow escucha en el puerto `5000` dentro de la red y se publica en el host en `5001`. La API se conecta a `http://mlflow:5000` y carga al iniciar los tres modelos `@champion`.
 
 Modelos que sirve la API:
 
@@ -228,10 +263,9 @@ Modelos que sirve la API:
 
 La carga la hace `mibici/api/registry.py` (`load_champion`) en dos pasos:
 
-1. **En el host**, `mlflow.pyfunc.load_model("models:/<nombre>@champion")` carga directo, porque la ruta local de los artefactos existe.
-2. **En el contenedor**, ese paso falla con `No such artifact: ''`, porque el registry guarda una ruta local del host. Entonces resuelve el alias con `MlflowClient` y descarga los artefactos por el proxy `mlflow-artifacts:/` del servidor. Por eso el servidor necesita `--artifacts-destination ./mlruns` (ver [Conexión del contenedor con MLflow](#conexión-del-contenedor-con-mlflow)).
+P2 v4 tiene el alias `@ab-candidate` y `stage=evaluation`; no sirve tráfico de producción. Las versiones `@champion` tienen `stage=production`. La evidencia del registro está en [`reports/registry_issue191.md`](reports/registry_issue191.md).
 
-Para comprobar qué versión resuelve cada alias y que los tres modelos cargan:
+Para revisar las versiones y aliases de un Registry local:
 
 ```bash
 python scripts/verificar_registry.py
@@ -273,6 +307,42 @@ Las capturas de pantalla de los *runs*, artefactos y comparación de modelos se 
 ```text
 reports/figures/mlflow_evidencia/
 ```
+## Arquitectura de extremo a extremo
+
+```mermaid
+flowchart LR
+    D["Datos MiBici<br/>mibici/dataset.py"] --> F["Features<br/>mibici/features.py"]
+    F --> T["MLflow Project / Tracking<br/>MLproject"]
+    T --> R["Model Registry<br/>mibici/modeling/register.py"]
+    R --> C["Docker Compose<br/>MLflow + API"]
+    C --> A["FastAPI<br/>puerto 8000"]
+    A --> L["Locust<br/>locustfile.py / scripts/load_test.sh"]
+
+    F --> E["Evidently<br/>mibici/monitoring/drift.py"]
+    R --> AB["A/B testing<br/>mibici/modeling/ab_testing.py"]
+
+    CI["GitHub Actions<br/>.github/workflows/ci.yml"] --> Q["Ruff y Pytest"]
+    CI --> B["Build de Docker"]
+    B --> S["Smoke test de Compose<br/>mock registry"]
+```
+
+Locust se ejecuta por separado contra una API disponible. No forma parte del pipeline de CI descrito arriba. El smoke test de CI usa el Registry simulado; el despliegue local con modelos reales requiere el Registry local preparado.
+
+## Mapa de rúbrica
+
+La tabla relaciona sus componentes con archivos y comandos que permiten comprobarlos.
+
+| Evidencia | Archivo o comando |
+|---|---|
+| Organización del proyecto | `pyproject.toml`, `MLproject` y el árbol de carpetas de este README |
+| Ingesta y manifiesto | `mibici/dataset.py`, `data/manifest.json`; `python -m mibici.dataset` |
+| Ingeniería de características | `mibici/features.py`, `tests/test_features.py`; `python -m mibici.features` |
+| Experimentos de MLflow | `MLproject`, `mibici/mlflow_entry.py`; `mlflow run . -e train ...` |
+| Model Registry | `mibici/modeling/register.py`, `scripts/verificar_registry.py` |
+| API y despliegue | `mibici/api/`, `Dockerfile`, `docker-compose.yml`; `make compose-up`, `make compose-test` |
+| CI/CD | `.github/workflows/ci.yml`; Ruff, Pytest, build y smoke test de Compose |
+| Prueba de carga | `locustfile.py`, `scripts/load_test.sh`; `bash scripts/load_test.sh A 1` |
+| Drift y A/B | `mibici/monitoring/drift.py`, `mibici/modeling/ab_testing.py`; entry points `drift` y `ab_test` |
 
 ## Pruebas de calidad y seguridad
 El proyecto incluye pruebas con `pytest`, validación de datos con `DeepChecks` y chequeos de seguridad (`bandit` + `pip-audit`).
@@ -291,46 +361,27 @@ El proyecto incluye pruebas con `pytest`, validación de datos con `DeepChecks` 
 Ya estando en el entorno virtual, es necesario ejecutar
 
 1. Pruebas unitarias `pytest`
+
   ```bash
 pytest -v
   ```
 
-Salida ejemplo
-  ```bash
-platform darwin -- Python 3.12.9, pytest-9.1.1, pluggy-1.7.0 -- .venv/bin/python
-cachedir: .pytest_cache
-rootdir: /Users/gerardocarreno/Documents/MaestriaTecMonterrey/CuartoTrimestre/MLOps/Semana_5/TC5061-Proyecto-Equipo01
-configfile: pyproject.toml
-plugins: platformdirs-4.13.3, anyio-4.15.1
-collecting ... collected 84 items
+Los casos se organizan de la siguiente forma:
 
-tests/test_data.py::test_catalog_cover_post_pandemic_history PASSED      [  1%]
-tests/test_data.py::test_normalize_columns_canonical_schema PASSED       [  2%]
-tests/test_data.py::test_normalize_columns_mangled_header_2023_04 PASSED [  4%]
-tests/test_data.py::test_unified_parquet_exists_and_is_non_empty PASSED  [  5%]
-tests/test_data.py::test_manifest_is_versioned_and_complete PASSED       [  6%]
-tests/test_data.py::test_output_paths_limit_escribe_aparte PASSED        [  7%]
-...
-tests/test_reproducibilidad.py::test_misma_semilla_repite_predicciones_y_metricas PASSED [ 97%]
-tests/test_reproducibilidad.py::test_semilla_distinta_cambia_el_entrenamiento PASSED [ 98%]
-tests/test_reproducibilidad.py::test_ridge_tambien_es_reproducible PASSED [100%]
-
-================== 84 passed, 41 warnings in 32.45s ===================
-  ```
-
-> Para que las 84 corran hace falta el entorno de validación del punto 3 (`make validation_env`): sin él, `test_validacion_completa_con_deepchecks` se salta y el total queda en 83.
+- `tests/test_data.py`: ingesta, manifiesto, hashes, esquema y CLI.
+- `tests/test_features.py`: cálculo de features, lags, split temporal y etiqueta de riesgo.
+- `tests/test_modeling.py`: métricas, configuración y evaluación de modelos.
+- `tests/test_reproducibilidad.py`: reproducibilidad de predicciones y métricas.
+- `tests/test_register.py`: selección de modelos, aliases e idempotencia del registro.
+- `tests/test_proxy_riesgo.py`: construcción y análisis del proxy de riesgo.
+- `tests/test_data_validation.py`: esquema y validación de datos con DeepChecks.
+- `tests/test_ab_testing.py`: métricas, prueba de McNemar y flujo A/B.
 
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\pytest`
 ![Pytest Success](reports/figures/evidencia_pruebas_calidad_seguridad/pytest.png)
 
-2. Pruebas de reproducibilidad del entrenamiento
-  ```bash
-pytest tests/test_reproducibilidad.py -v
-  ```
 
-Verifica que dos entrenamientos con la misma semilla producen las mismas predicciones y métricas, que cambiar la semilla sí altera el resultado (control negativo) y que Ridge es estable entre corridas.
-
-3. Validación de datos con `DeepChecks`
+2. Validación de datos con `DeepChecks`
 
 Revisa tipos, valores faltantes, duplicados y drift entre train y test. Corre en un entorno aparte porque DeepChecks 0.19.1 no funciona con las versiones de scikit-learn y NumPy del proyecto.
 
@@ -365,7 +416,7 @@ El umbral de drift es 0.2 y ninguna columna lo alcanza. Las 758 filas duplicadas
 Captura de la ejecución de `make validate` con DeepChecks, `reports\figures\evidencia_pruebas_calidad_seguridad\DeepChecks.png`
 ![Validación DeepChecks](reports/figures/evidencia_pruebas_calidad_seguridad/DeepChecks.png)
 
-4. Análisis de calidad
+3. Análisis de calidad
   ```bash
 ruff check .
   ```
@@ -378,7 +429,7 @@ All checks passed!
 Captura de pantalla para verificar que se ejecute correctamente `reports\figures\evidencia_pruebas_calidad_seguridad\ruff.png`
 ![Lint Success](reports/figures/evidencia_pruebas_calidad_seguridad/ruff.png)
 
-5. Chequeos de seguridad (`bandit` + `pip-audit`)
+4. Chequeos de seguridad (`bandit` + `pip-audit`)
   ```bash
 make security
   ```
@@ -387,6 +438,18 @@ Los reportes quedan en `reports/security/bandit_report.txt` y `reports/security/
 
 Captura de la ejecución de `make security`, `reports\figures\evidencia_pruebas_calidad_seguridad\security.png`
 ![Security Success](reports/figures/evidencia_pruebas_calidad_seguridad/security.png)
+
+### Ejecutar las comprobaciones agrupadas
+
+```bash
+make check-all
+```
+
+`make check-all` ejecuta las pruebas, la validación de datos y los chequeos de seguridad. Ruff se ejecuta por separado con `make lint`.
+
+La configuración del pipeline de CI está en [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+La preparación y protección de datos se documenta en [`docs/clean_doc.md`](docs/clean_doc.md).
 
 ### Comparación de Familias de Modelos
 
@@ -448,31 +511,7 @@ La documentación consolidada de los tres modelos `@champion` (uso previsto, mé
 - **Config centralizada**: rutas, cortes de fechas y `SEED` se leen de `mibici/config.py`, sin duplicarlos en `mibici/dataset.py` ni en `mibici/modeling/`.
 - **`.gitignore`**: excluye los datos MiBici (`/data/*`, salvo `data/manifest.json`), `mlruns/`, `mlartifacts/`, `.env` y los modelos serializados (`models/*.pkl`, `models/*.joblib`, `models/*.onnx`, `models/*.bin`).
 - **Versionado de datos**: `data/manifest.json` guarda el SHA-256 del parquet unificado y de la nomenclatura, con el total de viajes y estaciones. Es lo único de `data/` que entra al repo.
-
-## Seguridad y Calidad del Código
-
-Para garantizar que el repositorio no exponga credenciales ni dependencias vulnerables, integramos herramientas de análisis estático y auditoría de seguridad:
-
-- **Chequeo de credenciales (Issue #102):** El archivo `.gitignore` excluye explícitamente `.env`, bases de datos locales (`mlflow.db`) y datos crudos (`data/raw/`). Se verificó en el historial mediante `git ls-files` que no existen secretos expuestos. Asimismo, una búsqueda con `git grep` descartó credenciales hardcodeadas. La plantilla versionada es [`.env.example`](.env.example): se copia a `.env` (no versionado) y se edita.
-- **Análisis estático (Bandit v1.9.4):** Se ejecuta sobre el directorio `mibici/`. Se detectaron 5 alertas de severidad baja (Low) asociadas al uso de `subprocess` en `tracking.py` y `mlflow_entry.py`. **Justificación (Issue #101):** Estas alertas se asumen como seguras ya que los subprocesos solo ejecutan comandos internos de infraestructura (`git rev-parse HEAD` y llamadas nativas a Python), sin procesar *input* externo no confiable. El reporte completo está en `reports/security/bandit_report.txt`.
-- **Auditoría de dependencias (pip-audit v2.10.1):** El escaneo inicial detectó la vulnerabilidad *CVE-2026-53995* en la librería `mlflow` (v3.17.0). **Resolución:** Se mitigó el riesgo actualizando la dependencia a `mlflow==3.17.2` en el archivo `requirements.txt`, resultando en una auditoría limpia. El reporte está en `reports/security/pip_audit_report.txt`.
-
-Para ejecutar automatizadamente los chequeos de seguridad (Issue #101), utiliza el siguiente comando de `make`:
-```bash
-make security
-```
-
-## Ejecución de Pruebas y Chequeos de Seguridad
-
-Para garantizar la calidad y seguridad del código, este repositorio integra pruebas unitarias, validación de datos y análisis estático. Todo el flujo está orquestado mediante `Make`.
-
-### Instrucciones de ejecución
-Desde la raíz del repositorio, crea una vez el entorno de validación con `make validation_env` y ejecuta el siguiente comando unificado:
-```bash
-make check-all
-```
-
-- **Limpieza y privacidad:** consulta la [preparación y protección de datos](docs/clean_doc).
+- **Limpieza y privacidad:** consulta la [preparación y protección de datos](docs/clean_doc.md).
 
 ## Despliegue de Modelos (API REST con Docker)
 
@@ -481,16 +520,35 @@ El servicio expone los modelos de Regresión (P1), Clasificación (P2) y Cluster
 Para levantar el sistema
 
 ```bash
-cp .env.example .env
-docker compose up -d
+docker compose up -d --build --wait
+docker compose ps
 bash scripts/test_api.sh
 ```
-En un solo comando
+
+`--wait` espera a que los servicios estén saludables antes de ejecutar el script. Si necesitas crear `.env`, hazlo solo cuando no exista: el archivo es opcional para Compose y copiar la plantilla encima de un `.env` existente lo reemplazaría.
+
 ```bash
-cp .env.example .env && docker compose up -d && bash scripts/test_api.sh
+# Opcional: crear .env solo si todavía no existe
+[ -f .env ] || cp .env.example .env
 ```
 
-### Requisitos
+También puedes iniciar y probar en una sola línea:
+
+```bash
+docker compose up -d --build --wait && bash scripts/test_api.sh
+```
+
+| Verificación | Resultado |
+|---|---|
+| `docker compose up -d --build --wait` | Servicios saludables en 14 s |
+| `scripts/test_api.sh` | 5/5: health, P1, P2, P3 y payload inválido |
+| `pytest tests/` | 99 pruebas aprobadas |
+| CI | Run [45658015658](https://github.com/laloz60/TC5061-Proyecto-Equipo01/actions/runs/45658015658) exitoso |
+| Swagger `/docs` | HTTP 200 |
+
+Después de alinear los tags del Registry real, la ejecución reportada obtuvo `102 passed`.
+
+#### Requisitos
 
 - Docker instalado y en ejecución (el `Dockerfile` es estándar OCI: funciona igual con Podman).
 - Servidor MLflow accesible desde el contenedor (ver [Conexión del contenedor con MLflow](#conexión-del-contenedor-con-mlflow)).
@@ -588,6 +646,7 @@ Errores comunes:
 | `Connection refused` | Servidor apagado, o lanzado con `--host 127.0.0.1` en Linux | Levantarlo; en Linux usar `--host 0.0.0.0` |
 | `403 Server: AirTunes` (macOS) | AirPlay ocupa el puerto 5000 | Apagar el receptor AirPlay o usar otro puerto |
 | `"docker" no se reconoce` (Windows) | La terminal se abrió antes de instalar Docker Desktop | Reiniciar VS Code o la terminal |
+| `403 Invalid Host header` en `http://localhost:5001` | Falta permitir el puerto publicado del host | Usa el `docker-compose.yml` actualizado, que incluye `localhost:5001` y `127.0.0.1:5001` |
 
 **Alternativa evaluada: empaquetar el modelo en la imagen.** Consiste en descargar los artefactos del registry al construir la imagen y cargarlos desde disco, sin servidor MLflow en tiempo de ejecución.
 
@@ -637,9 +696,10 @@ El servicio consulta el Model Registry de MLflow mediante `MLFLOW_TRACKING_URI`.
   - Docker Build (Buildx Cache & GHCR): construye la imagen de la API desde `./Dockerfile`, usando caché de GitHub Actions (`type=gha`) y la publica en `ghcr.io` únicamente en `push` a `main`.
   - API Smoke Test (Docker Compose): levanta el stack con `docker compose up -d --build --wait` (con `MIBICI_MOCK_REGISTRY="1"`) y ejecuta `scripts/test_api.sh http://localhost:8000` verificando `/health`, P1 (`demanda_predicha_viajes`), P2 (`riesgo_desabasto_o_saturacion`), P3 (`cluster_asignado`) y payload inválido (`HTTP status: 422`), limpiando al final con `if: always()`.
   - Pipeline Summary (Notificación): corre siempre (`if: always()`), escribe en `$GITHUB_STEP_SUMMARY` una tabla con el resultado de cada job y si la imagen se publicó, y deja una anotación `::notice` (pipeline en verde) o `::error` (con el job que falló) visible en el PR y en la pestaña *Checks*.
-- Triggers:
-  - `push` en las ramas `main`, `feature/`, `fix/`, `chore/` y `docs/`.
-  - `pull_request` hacia `main`
+
+- **Triggers:** `pull_request` hacia `main` y `push` a `main`.
+- **Concurrencia:** las corridas anteriores de un PR se cancelan al llegar una nueva; las corridas de `main` no se cancelan.
+- Una corrida cancelada no se reporta como fallo del pipeline.
 
 ### Prueba de carga
 
@@ -662,6 +722,16 @@ También se puede usar el script de pruebas de carga ya sea A, B o C de la répl
 bash scripts/load_test.sh A 1
 ```
 
+Los escenarios disponibles son `A`, `B` y `C`; el segundo argumento define una o dos réplicas. Para dos réplicas, el script utiliza `docker-compose.scale.yml` y el balanceador de `docker/nginx-lb.conf`.
+
+Los resultados de carga están en `reports/load/`, incluyendo:
+
+- `reports/load/locust_report.html`
+- `reports/load/docker_stats.csv`
+- `reports/load/docker_stats_picos.csv`
+- `reports/load/costos_inferencia.csv`
+- `reports/load/finops.md`
+
 ## Costo por inferencia
 El análisis de costos y optimizaciones en AWS EC2 está en `reports/load/finops.md` y `reports/load/costos_inferencia.csv`, con fórmula costo/inferencia = precio_hora * duracion_h / peticiones_exitosas. En docker stats 100 % = 1 vCPU completa. 
 
@@ -673,55 +743,103 @@ Mlflow consume 1827–1932 MiB con CPU promedio de 2.2–5% y la API solo lo usa
 
 Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% en B (1300 - 400 ms), pero multiplican el costo por inferencia 3.2–3.6× en B y C; escalar horizontalmente con 2 × t3.small + ALB (~0.072 USD/h, incluye ~1 LCU) cuesta ~57% menos que t3.xlarge (0.1664 USD/h). También se evalúan Spot, Savings Plan de 1 año, vigilar recargos por créditos de CPU en t3, caché de modelos en arranque, batching y descarte de Redis + worker RQ porque el cuello de botella es CPU de la API.
 
+## Entrega Final
+
+- **Model Card:** [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
+- **Presentación final:** **PENDIENTE**
+- **Video de demostración:** **PENDIENTE**
+
+## Estructura del repositorio
 ```
-├── LICENSE            <- Licencia open-source (MIT)
-├── Makefile           <- Comandos de conveniencia (make data, make test, ...)
-├── README.md          <- Este archivo
-├── locustfile.py         <- pruebas de carga   
-├── docker-compose.yml    <- Orquestación de servicios con Docker     
-├── docker-compose.scale.yml    <- Orquestación escalado a 2 réplicas    
-├── requirements-load.txt     <- Dependencias para pruebas de carga
-├── .github/           <- Configuración y automatización de GitHub
-│   └── workflows/     <- Flujos de trabajo de GitHub
-│       └── ci.yml     <- Pipeline CI/CD
-├── data
-│   ├── external       <- Datos de terceros
-│   ├── interim        <- Datos intermedios transformados
-│   ├── processed      <- datasets finales para modelado
-│   ├── raw            <- Parquet unificado + CSVs descargados (NO versionados)
-│   └── manifest.json  <- Versionado: totales + SHA-256 de cada archivo de datos
-│
-├── docs               <- Proyecto mkdocs
-│    ├── clean_doc.md   <- Documentación limpieza de datos
-│    └── MODEL_CARD.md  <- Model Card consolidado (P1, P2 y P3)
-│
-├── models             <- Modelos entrenados y serializados
-├── notebooks          <- Notebooks Jupyter (iniciales: <iniciales>-<descripción>)
-├── pyproject.toml     <- Metadatos del paquete mibici + config de ruff
-├── references         <- Diccionarios de datos, ML Canvas, documentos de diseño
-├── reports
-│   └── figures        <- Gráficas para el reporte (evidencia MLflow, etc.)
-│   └── evidencia_pruebas_calidad_seguridad  <- Capturas de pytest, deepchecks y seguridad
-│   └── pr_team       <- PR semanal        
-│   └── load          <- Evidencias de carga, costos
-├── requirements.txt   <- Dependencias fijadas (reproducibilidad)
-├── scripts
-│   ├── costo_inferencia.py
-│   ├── load_test.sh          <- Prueba de carga / muestreo
-│   ├── resumen_stats.py      <- Resumen de picos
-│   ├── test_api.sh           <- Pruebas de humo de la API
-│   └── verificar_registry.py
-├── mibici             <- Código fuente
-│   ├── config.py          <- Rutas, semilla, corte de datos y partición temporal
-│   ├── dataset.py         <- Ingesta: descarga → normalización → Parquet + manifiesto
-│   ├── features.py        <- Feature engineering sin fuga temporal
-│   ├── modeling
-│   │   ├── train.py       <- Entrenamiento P1/P2/P3
-│   │   └── predict.py     <- Inferencia
-│   ├── reportes_p3.py     <- Regenera summary y figuras de P3 sin binarios
-│   └── plots.py           <- Visualizaciones
-│
-└── tests              <- Pruebas (pytest)
+├── .github/
+│   └── workflows/
+│       └── ci.yml                           <- Ruff, Pytest, Docker y smoke test
+├── data/
+│   ├── raw/                                 <- CSV y Parquet descargados; no versionados
+│   └── manifest.json                        <- Totales y hashes SHA-256 versionados
+├── docker/
+│   ├── mlflow.Dockerfile                    <- Imagen del servidor MLflow
+│   └── nginx-lb.conf                        <- Balanceador para dos réplicas
+├── docs/
+│   ├── docs/
+│   ├── MODEL_CARD.md                        <- Model Card de P1, P2 y P3
+│   ├── clean_doc.md                         <- Limpieza y protección de datos
+│   ├── guion_demo.md                        <- Guion y tiempos de la demostración
+│   ├── mkdocs.yml                           <- Configuración de MkDocs
+│   └── README.md                            <- README de la documentación
+├── mibici/
+│   ├── api/
+│   │   ├── main.py                          <- Endpoints FastAPI P1, P2 y P3
+│   │   ├── registry.py                      <- Carga dinámica de modelos @champion
+│   │   └── schemas.py                       <- Esquemas y validación Pydantic
+│   ├── modeling/
+│   │   ├── ab_testing.py                    <- Comparación V1 vs. V2 de P2
+│   │   ├── predict.py                       <- Predicción e inferencia
+│   │   ├── register.py                      <- Registro y selección del Model Registry
+│   │   ├── tracking.py                      <- Logging de parámetros y artefactos
+│   │   └── train.py                         <- Entrenamiento P1, P2 y P3
+│   ├── monitoring/
+│   │   ├── __init__.py
+│   │   └── drift.py                         <- Reporte de drift con Evidently
+│   ├── config.py                            <- Rutas, partición temporal y semilla
+│   ├── dataset.py                           <- Descarga y preparación de datos
+│   ├── features.py                          <- Feature engineering sin fuga temporal
+│   ├── mlflow_entry.py                      <- Adaptador de los entry points
+│   ├── plots.py                             <- Funciones de visualización
+│   └── reportes_p3.py                       <- Regeneración del resumen y figuras de P3
+├── models/
+│   └── .gitkeep                             <- Directorio local para modelos serializados
+├── notebooks/
+│   ├── 1.0-GC-exploracion.ipynb             <- Exploración inicial
+│   └── 3.0-JT-evaluacion-clustering.ipynb   <- Evaluación de P3
+├── references/
+│   ├── arquitectura.md                      <- Arquitectura técnica
+│   ├── arquitectura.png                     <- Diagrama de arquitectura
+│   ├── definicion_datos.md                  <- Definición y reglas de datos
+│   ├── ml_canvas.md                         <- ML Canvas
+│   ├── MLCanvas.pdf                         <- ML Canvas en PDF
+│   ├── modelos_y_metricas.md                <- Modelos y métricas
+│   ├── proxy_riesgo_p2.md                   <- Proxy de riesgo de P2
+│   ├── references.md                        <- Referencias del proyecto
+│   ├── TC5061_Propuesta_Proyecto_Equipo01.docx
+│   └── TC5061_Reporte_MLFlow_Equipo01.docx
+├── reports/
+│   ├── api/                                 <- Evidencia de contenedores y API
+│   ├── data_validation/                     <- Resultado de DeepChecks
+│   ├── figures/                             <- Capturas y gráficas
+│   ├── load/                                <- Evidencia Locust, Docker y costos
+│   ├── pr_team/                             <- Evidencia de Pull Requests
+│   ├── security/                            <- Reportes de Bandit y pip-audit
+│   ├── ab_testing_p2.csv                    <- Métricas de A/B testing
+│   ├── ab_testing_p2.md                     <- Resultado de A/B testing
+│   ├── drift_report.html                    <- Reporte Evidently
+│   ├── drift_report.json                    <- Métricas de drift
+│   ├── registry_issue191.md                 <- Evidencia del Registry
+│   └── reporte_actividad9.md                <- Resumen integrado de drift y A/B
+├── scripts/
+│   ├── costo_inferencia.py                  <- Cálculo de costo por inferencia
+│   ├── graficas_carga.py                    <- Gráficas de pruebas de carga
+│   ├── load_test.sh                         <- Locust y muestreo de Docker
+│   ├── plot_locust_results.py               <- Gráficas de resultados Locust
+│   ├── resumen_stats.py                     <- Resumen de estadísticas
+│   ├── test_api.sh                          <- Smoke test de los endpoints
+│   ├── validar_clon_limpio.sh               <- Validación de clon reproducible
+│   └── verificar_registry.py                <- Verificación de aliases y modelos
+├── tests/                                   <- Pruebas unitarias y de reproducibilidad
+├── docker-compose.yml                       <- Orquestación MLflow y API
+├── docker-compose.scale.yml                 <- Despliegue con dos réplicas
+├── Dockerfile                               <- Imagen OCI de la API
+├── LICENSE                                  <- Licencia MIT
+├── locustfile.py                            <- Usuarios y tareas de carga
+├── Makefile                                 <- Comandos de pruebas, seguridad y Docker
+├── MLproject                                <- Entry points reproducibles
+├── pyproject.toml                           <- Configuración de Python y Ruff
+├── python_env.yaml                          <- Entorno de Python para MLflow
+├── README.md                                <- Documentación principal
+├── requirements.txt                         <- Dependencias principales
+├── requirements-api.txt                     <- Dependencias de la API
+├── requirements-load.txt                    <- Dependencias de carga
+└── requirements-validation.txt              <- Dependencias de DeepChecks
 ```
 
 ## Flujo de trabajo Git
@@ -741,3 +859,5 @@ Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% e
 | Gemma Martínez | [@GemmaMartinez](https://github.com/GemmaMartinez) | P2 — baseline de clasificación (#7), evidencia MLflow (#11) |
 | Jesús Tafolla | [@JesusTafolla](https://github.com/JesusTafolla) | Clustering P3 (#8), propuesta de modelos y métricas (#9) |
 | smuciton | [@smuciton](https://github.com/smuciton) | Definición de datos y condiciones de uso (#2), diagrama de arquitectura (#3), P2 — proxy de riesgo (#6) |
+
+Los PR del equipo y evidencias, se encuentran en: `\reports\pr_team`
