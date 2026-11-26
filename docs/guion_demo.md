@@ -1,124 +1,260 @@
-# Guion de la demo (issue #198)
+# Guion del video final — Proyecto MiBici, Equipo 01
 
-**Entregable:** video continuo `TC5061_Proyecto_Final_Equipo01.mp4`, **mínimo 2 y máximo 5 minutos** (objetivo: **~4:00**), sin cortes de edición, grabado por el equipo.
+**Entregable:** video continuo `TC5061_Proyecto_Final_Equipo01.mp4`, **mínimo 2:00 y máximo 5:00** (objetivo **4:30**), sin cortes de edición y grabado por el equipo (issue #200).
 
-**Criterio de rúbrica:** Presentación y demostración — 20 pts. La demo funcional (API respondiendo peticiones reales) y una presentación que comunique problema, solución y decisiones de MLOps son lo que separa el nivel *Excelente* del *Satisfactorio*.
+**Criterio de rúbrica:** Presentación y demostración (20 pts). Para el nivel *Excelente* el video debe mostrar la **API respondiendo peticiones reales** y comunicar con claridad el **problema**, la **solución** y las **decisiones de MLOps**.
+
+**Material:** presentación `TC5061_Proyecto_Final_Equipo01.pdf` (13 diapositivas, exportada de `reports/Proyecto Final MLOps - MiBici Equipo 01.pptx`) y el sistema levantado con Docker Compose y el Model Registry real.
 
 ---
 
 ## 1. Reparto de turnos
 
-| Rol | Integrante | Responsabilidad |
+| Rol | Integrante | Narra |
 |---|---|---|
-| **Teclado** (único que manipula) | **Gerardo (@laloz60)** | Maneja todas las pestañas y comandos; no narra mientras escribe. Dueño de la infra (issue #194). |
-| Narrador A — problema y solución | **smuciton (@smuciton)** | Bloques 1a–1b (presentación parte 1, #196). |
-| Narrador B — decisiones de MLOps | **Gemma (@GemmaMartinez)** | Bloque 1c + bloque 5 (decisiones, gobernanza, drift; presentación parte 2, #197). |
-| Narrador C — modelos y registry | **Jesús (@JesusTafolla)** | Bloques 3–4 (modelos, A/B, Model Registry). |
+| **Teclado** (único que manipula pantalla y comandos) | **Gerardo** (@laloz60) | Diapositivas 7, 8 y 12; demo de la API y del CI/CD |
+| Narrador A — problema y FinOps | **Sebastian** (@smuciton) | Diapositivas 3, 4 y 9; cierre |
+| Narrador B — experimentación y Registry | **Jesús** (@JesusTafolla) | Diapositivas 5 y 6; demo del Model Registry |
+| Narrador C — gobernanza y decisiones | **Gemma** (@GemmaMartinez) | Diapositivas 1, 2, 10 y 11; demo del reporte de drift |
 
-> Regla de grabación: **una sola voz a la vez**; el teclado espera la señal del narrador (`…y ahora vamos a…`) antes de cambiar de ventana.
+Cada integrante habla alrededor de un minuto.
+
+**Reglas de grabación**
+- Una sola voz a la vez. Cada narrador termina su parte con la frase puente indicada en el guion; esa es la señal para que Gerardo cambie de diapositiva o de ventana.
+- Gerardo no habla mientras escribe o hace clic, salvo en sus propios bloques.
+- Si alguien se equivoca en una frase, **sigue adelante sin detenerse**: el video no admite cortes.
 
 ---
 
-## 2. Pestañas y comandos preparados ANTES de grabar
+## 2. Preparación antes de grabar
 
-Abrir en este orden (nada se abre durante la grabación):
+### 2.1 Ventanas abiertas en este orden (nada se abre durante la grabación)
 
-| # | Pestaña / ventana | Contenido |
+| Ventana | Contenido | Estado inicial |
 |---|---|---|
-| T1 | Presentación (PDF a pantalla completa) | `reports/TC5061_Proyecto_Final_Equipo01.pdf` (#197) |
-| T2 | Terminal A | Sistema ya levantado (ver abajo) |
-| T3 | Navegador — Swagger | <http://localhost:8000/docs> |
-| T4 | Navegador — MLflow UI | <http://localhost:5001> → modelos `mibici-equipo01-*` |
-| T5 | Navegador — Evidently | `reports/drift_report.html` (abierto con `open reports/drift_report.html`) |
-| T6 | Navegador — GitHub Actions | Run en verde de `main` |
+| **T1** | `reports/TC5061_Proyecto_Final_Equipo01.pdf` | Pantalla completa, en la diapositiva 1 |
+| **T2** | Terminal en la raíz del repo | Sistema ya levantado; pantalla limpia (`clear`) |
+| **T3** | Swagger: <http://localhost:8000/docs> | Sección `POST /predict/p1-demanda` expandida, con **Try it out** activado |
+| **T4** | MLflow UI: <http://localhost:5001> → pestaña **Models** | Lista con los 3 modelos `mibici-equipo01-*` |
+| **T5** | `reports/drift_report.html` (`open reports/drift_report.html`) | Al inicio del resumen de drift |
+| **T6** | GitHub Actions: último run de `main` en verde | Página **Summary** con el grafo de jobs |
 
-**Sistema levantado y verificado antes de grabar** (no construir imágenes durante la grabación):
+Zoom del navegador a **90 %** para que se vean completos el grafo del CI y las respuestas de Swagger.
+
+### 2.2 Sistema levantado y verificado (15 minutos antes)
 
 ```bash
-docker compose up -d --build --wait   # ~75 s en frío; deja ambos healthy
-docker compose ps                     # api y mlflow healthy
-bash scripts/test_api.sh http://localhost:8000   # 5/5 en verde (ensayo previo)
+docker compose up -d --build --wait            # api y mlflow en healthy
+docker compose ps                              # confirmar ambos healthy
+bash scripts/test_api.sh http://localhost:8000 # 5 pruebas: 200 x4 y 422
 ```
 
-**Pre-chequeo de 30 s antes de grabar:**
+### 2.3 Revisión de 30 segundos justo antes de grabar
 
 ```bash
-docker compose ps                                  # ¿healthy?
-curl -s localhost:8000/health                      # {"status":"healthy",...}
-curl -s -o /dev/null -w "%{http_code}\n" localhost:5001/   # 200 (si da 403, falta el fix de ALLOWED_HOSTS)
+docker compose ps                                          # healthy
+curl -s localhost:8000/health                              # {"status":"healthy","modelos_cargados":["p1","p2","p3"]}
+curl -s -o /dev/null -w "%{http_code}\n" localhost:5001/   # 200
+clear
 ```
 
-> El bloque 4 depende de la UI de MLflow en `localhost:5001`. Si responde **403** (`Invalid Host header`), el `MLFLOW_SERVER_ALLOWED_HOSTS` de `docker-compose.yml` no incluye el 5001: corregirlo y `docker compose up -d mlflow` (ver hallazgo A de `reports/api/evidencia_despliegue_final.md`).
+### 2.4 Payloads preparados para Swagger (copiar a un archivo de notas, no a la pantalla grabada)
+
+**P1 y P2: lunes 8:00, estación con alta demanda reciente**
+```json
+{"hora_del_dia": 8, "dia_semana": 0, "mes": 10, "es_fin_de_semana": 0,
+ "salidas_lag_1h": 12.0, "salidas_lag_24h": 14.0, "salidas_lag_168h": 13.0,
+ "salidas_media_7d": 11.5, "salidas_prom_4sem": 12.0,
+ "neto_lag_1h": -6.0, "neto_lag_24h": -5.0, "neto_media_7d": -3.0,
+ "capacidad": 20.0, "latitud": 20.6736, "longitud": -103.3440}
+```
+Respuesta esperada: P1 ≈ **12.9 viajes**; P2 **riesgo 1** con probabilidad ≈ **0.9995**.
+
+**P3: perfil horario de una estación tipo oficina** (es el ejemplo que ya trae Swagger)
+```json
+{"perfil_horario": [0,0,0,0,0,1,4,12,20,10,6,5,6,6,5,6,9,15,18,9,5,3,1,0]}
+```
+Respuesta esperada: **`cluster_asignado: 1`**.
+
+**Entrada inválida (para mostrar el 422)**
+```json
+{"perfil_horario": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+```
+Respuesta esperada: **422** con el mensaje "el perfil horario debe tener al menos un viaje".
 
 ---
 
-## 3. Secuencia cronometrada (objetivo 4:00)
+## 3. Línea de tiempo (objetivo 4:30, límite 5:00)
 
-| Bloque | Tiempo | Acumulado | Quién narra | Qué se muestra |
-|---|---:|---:|---|---|
-| 0. Portada / título del equipo | 0:10 | 0:10 | Gemma | T1: portada del PDF |
-| 1. Problema, datos y arquitectura | 1:10 | 1:20 | smuciton (1a–1b) | T1: diapositivas de problema + arquitectura |
-| 2. Decisiones de MLOps (resumen) | 0:40 | 2:00 | Gemma | T1: diapositiva de decisiones |
-| 3. Sistema levantado + API real | 0:50 | 2:50 | Gerardo (voz guía) | T2 `docker compose ps` → T3 Swagger: petición real a P1, P2 y P3 |
-| 4. Model Registry y A/B | 0:45 | 3:35 | Jesús | T4 MLflow UI: versiones, `@champion`, `@ab-candidate` |
-| 5. Monitoreo (drift) y gobernanza | 0:35 | 4:10 | Gemma | T5 reporte Evidently: 4/21 columnas con drift, dataset sin drift |
-| 6. CI/CD en verde + cierre | 0:35 | 4:45 | Gerardo | T6 run de GitHub Actions verde → cierre de Jesús/Gemma |
+| # | Pantalla | Duración | Acumulado | Narra |
+|---|---|---:|---:|---|
+| 1 | Diapositiva 1 · Portada | 0:10 | 0:10 | Gemma |
+| 2 | Diapositiva 2 · Agenda | 0:05 | 0:15 | Gemma |
+| 3 | Diapositiva 3 · Escala del Problema y Datos | 0:15 | 0:30 | Sebastian |
+| 4 | Diapositiva 4 · Tres Preguntas de Negocio | 0:15 | 0:45 | Sebastian |
+| 5 | Diapositiva 5 · Ingeniería y MLflow Project | 0:15 | 1:00 | Jesús |
+| 6 | Diapositiva 6 · Model Registry y Linaje | 0:17 | 1:17 | Jesús |
+| 7 | Diapositiva 7 · Arquitectura y Pipeline CI/CD | 0:16 | 1:33 | Gerardo |
+| 8 | Diapositiva 8 · Pruebas de Carga con Locust | 0:10 | 1:43 | Gerardo |
+| 9 | Diapositiva 9 · Optimización FinOps en AWS | 0:11 | 1:54 | Sebastian |
+| 10 | Diapositiva 10 · Drift, A/B Testing y Gobernanza | 0:16 | 2:10 | Gemma |
+| 11 | Diapositiva 11 · Decisiones de MLOps | 0:21 | 2:31 | Gemma |
+| 12 | Diapositiva 12 · Demo en Vivo y Conclusiones | 0:04 | 2:35 | Gerardo |
+| D1 | T2 · `docker compose ps` | 0:10 | 2:45 | Gerardo |
+| D2 | T3 · Swagger P1 | 0:20 | 3:05 | Gerardo |
+| D3 | T3 · Swagger P2 | 0:10 | 3:15 | Gerardo |
+| D4 | T3 · Swagger P3 y 422 | 0:15 | 3:30 | Gerardo |
+| D5 | T4 · MLflow UI, Model Registry | 0:30 | 4:00 | Jesús |
+| D6 | T5 · Reporte de Evidently | 0:13 | 4:13 | Gemma |
+| D7 | T6 · GitHub Actions en verde | 0:12 | 4:25 | Gerardo |
+| C | T1 · Diapositiva 12 · Cierre | 0:10 | **4:35** | Sebastian |
 
-**Límite duro: 5:00.** Si el ensayo cronometrado pasa de 4:45, recortar del bloque 1 (dejar 1 sola diapositiva de arquitectura) o del bloque 5 (mostrar solo el resumen, no las gráficas).
+La diapositiva 13 (fuentes de imágenes) no se muestra en el video.
 
----
-
-## 4. Texto y acciones por bloque
-
-### Bloque 0 — Portada (0:10)
-- **Gemma:** "Somos el Equipo 01 de TC5061. Les mostramos el sistema completo de MLOps de MiBici: de los datos al modelo en producción, en menos de cinco minutos."
-
-### Bloque 1 — Problema, datos, arquitectura (1:10)
-- **smuciton:**
-  - *Problema (0:25):* MiBici tiene ~470 estaciones; queremos **P1** predecir la demanda de viajes, **P2** anticipar estaciones en riesgo de quedarse sin bicis/anclajes, y **P3** agrupar estaciones por patrón de uso.
-  - *Datos (0:20):* 2023-05 a 2026-10, **partición temporal sin fuga** (train/val/test por fechas).
-  - *Arquitectura (0:25):* "Cookiecutter → feature engineering → MLflow Project/Tracking → Registry → API en Docker Compose → CI/CD con GitHub Actions → Locust → monitoreo con Evidently."
-
-### Bloque 2 — Decisiones de MLOps (0:40)
-- **Gemma:** elegimos **MLflow Project** para reproducir el pipeline con un solo comando (`mlflow run . -e train`); **selección por validación** (`val_mae`, `val_roc_auc`, `val_silhouette_score`) para no mirar el test; **Registry con aliases** `@champion` para que la API cargue la versión buena y no una candidata; **A/B testing** de P2 antes de promover; **CI/CD** que corre quality, tests en matriz ubuntu/macos, build Docker, smoke test y notificación.
-
-### Bloque 3 — Sistema levantado + API real (0:50) ⭐ el bloque que exige la rúbrica
-- **Gerardo:** "El sistema está corriendo con el Model Registry real, no el simulado del CI."
-  1. T2: `docker compose ps` → ambos **healthy**.
-  2. T3 (Swagger): "Petición real a P1" → payload de ejemplo → **Execute** → `200` con `demanda_predicha_viajes`.
-  3. "Lo mismo para P2" → `probabilidad_riesgo` → **200**.
-  4. "Y P3, que normaliza el perfil horario como en el entrenamiento" → `cluster_asignado` → **200**.
-  5. *(opcional si hay tiempo)* payload inválido → **422** con la validación de Pydantic.
-- **Gerardo (cierre del bloque):** "Cuatro endpoints, respuestas reales del modelo registrado."
-
-### Bloque 4 — Model Registry y A/B (0:45)
-- **Jesús:** T4 MLflow UI → `mibici-equipo01-p1-demanda`:
-  - "Tres modelos registrados y versionados. La versión **2** de P1 está como **`@champion`** — es la que sirve la API."
-  - "P2 también tiene `@champion`, y la versión **4** está como **`@ab-candidate`**: es la candidata del A/B testing, **en evaluación, no en producción**."
-  - "El linaje está documentado: run de origen, commit y métricas de validación."
-
-### Bloque 5 — Drift y gobernanza (0:35)
-- **Gemma:** T5 Evidently → "Comparamos referencia vs. actual, 30 mil filas cada una: **4 de 21 columnas con drift (19 %), el dataset NO marca drift** (el umbral es 50 %). Uno real: `estacion_id`, porque 14 estaciones se dieron de baja. El reporte se regenera con `mlflow run . -e drift`."
-- *(Si cabe:)* "El **Model Card** (`docs/MODEL_CARD.md`) documenta métricas, limitaciones y responsables, y el análisis **FinOps** muestra ~0.5 USD por millón de inferencias en spot."
-
-### Bloque 6 — CI/CD verde + cierre (0:35)
-- **Gerardo:** T6 → "El último run en `main` está en **verde**: quality, tests en ubuntu y macos, build de Docker, smoke test de la API."
-- **Jesús (cierre):** "Modelo registrado, API contenerizada, CI/CD automatizado, monitoreo y gobernanza: el ciclo completo de MLOps, funcionando."
+**Si el ensayo pasa de 4:45:** acortar la diapositiva 8 (decir solo la conclusión), la 9 (solo el −75 %) y saltar el 422 en D4. **Si queda por debajo de 3:30:** no agregar contenido; hablar más despacio.
 
 ---
 
-## 5. Ensayo cronometrado
+## 4. Guion detallado
 
-- [ ] Ensayo 1: sin narración, solo medir tiempos de carga de ventanas (T3 Swagger puede tardar ~2 s en renderizar).
-- [ ] Ensayo 2: completo con narración, cronómetro; objetivo **3:30–4:30**.
-- [ ] Verificar que **no** aparecen en pantalla: `.env`, tokens, traceback, o el `~$…docx` de Word.
-- [ ] Verificar audio: una sola voz, sin eco de dos narradores.
+> Las frases en *cursiva* son la señal para que Gerardo avance a la siguiente pantalla.
 
-## 6. Al terminar la grabación (#200)
+### Parte 1 — Presentación (0:00 – 2:35)
 
-1. Exportar como `TC5061_Proyecto_Final_Equipo01.mp4` (2–5 min).
-2. Subirlo a Canvas y enlazarlo en el PDF de la presentación (#197) y en el README (#189).
+**Diapositiva 1 · Portada (0:10) — Gemma**
+> "Hola, somos el Equipo 01 de Operaciones de Aprendizaje Automático. Les presentamos el proyecto integrador: un sistema de MLOps completo para MiBici, la bicicleta pública de Guadalajara."
+
+*Gerardo avanza.*
+
+**Diapositiva 2 · Agenda (0:05) — Gemma**
+> "Veremos el problema, la solución, las decisiones y la demo."
+
+*Gerardo avanza.*
+
+**Diapositiva 3 · Escala del Problema y Datos (0:15) — Sebastian**
+> "Trabajamos con dieciséis millones de viajes de 470 estaciones en 42 meses, de mayo de 2023 a octubre de 2026. Cada archivo se verifica con su hash, y la partición es temporal: entrenamos con el pasado y evaluamos con el futuro."
+
+*Gerardo avanza.*
+
+**Diapositiva 4 · Tres Preguntas de Negocio (0:15) — Sebastian**
+> "Respondemos tres preguntas. P1: cuántos viajes saldrán de cada estación, con un Random Forest. P2: qué estaciones están en riesgo de quedarse sin bicis o sin anclajes, con regresión logística. Y P3: qué estaciones comparten patrones de uso, con K-Means++."
+
+*"…y para que esto sea reproducible…" → Gerardo avanza.*
+
+**Diapositiva 5 · Ingeniería y MLflow Project (0:15) — Jesús**
+> "El repositorio sigue Cookiecutter y el pipeline completo es un MLflow Project: con `mlflow run` se ingiere, se generan features, se entrena y se registra desde un clon limpio. Además, 102 pruebas automáticas y chequeos de calidad y seguridad."
+
+*Gerardo avanza.*
+
+**Diapositiva 6 · Model Registry y Linaje (0:17) — Jesús**
+> "El mejor modelo de cada pregunta está registrado en MLflow con el alias `champion`, elegido por su métrica de validación, y guarda su linaje: run, commit y hashes de los datos. La API carga el `champion` al arrancar; promoverlo no exige reconstruir la imagen."
+
+*"…y así lo desplegamos." → Gerardo avanza.*
+
+**Diapositiva 7 · Arquitectura y Pipeline CI/CD (0:16) — Gerardo**
+> "Docker Compose levanta MLflow y la API con un solo comando. En cada cambio, GitHub Actions revisa el código, corre las pruebas en Ubuntu y macOS, publica la imagen, prueba el sistema completo y deja un resumen en el pull request."
+
+*Gerardo avanza.*
+
+**Diapositiva 8 · Pruebas de Carga con Locust (0:10) — Gerardo**
+> "Con Locust probamos tres escenarios. Con dos réplicas detrás de Nginx, la latencia p95 baja hasta 89 %; el cuello de botella es la CPU."
+
+*"Sebastian, ¿y cuánto cuesta?" → Gerardo avanza.*
+
+**Diapositiva 9 · Optimización FinOps en AWS (0:11) — Sebastian**
+> "Hoy cuesta entre 53 centavos y 1.55 dólares por millón de inferencias. Separar MLflow, que ocupa casi 2 GB, baja el costo hasta 75 %."
+
+*Gerardo avanza.*
+
+**Diapositiva 10 · Drift, A/B Testing y Gobernanza (0:16) — Gemma**
+> "Con Evidently, 4 de 21 variables cambiaron, pero el conjunto no cruza el umbral de drift. En el A/B de P2, la versión reentrenada no mejora por sí misma: la diferencia viene del umbral. Todo está en el Model Card."
+
+*Gerardo avanza.*
+
+**Diapositiva 11 · Decisiones de MLOps (0:21) — Gemma**
+> "Nuestras decisiones clave: partición temporal y selección por validación, para una evaluación honesta; reentrenar solo con drift global, con un ciclo de Continuous Training que promueve la nueva versión solo si gana; carga dinámica del `champion`; el mismo preprocesamiento al entrenar y al servir; y separar MLflow para bajar costos."
+
+*"Ahora, veámoslo funcionando." → Gerardo avanza.*
+
+**Diapositiva 12 · Demo en Vivo y Conclusiones (0:04) — Gerardo**
+> "Vamos a la demo."
+
+*Gerardo cambia a T2.*
+
+### Parte 2 — Demo funcional (2:35 – 4:25)
+
+**D1 · Sistema levantado (0:10) — Gerardo**
+- **Acción:** en T2 escribe `docker compose ps` y presiona Enter.
+> "El sistema está levantado con Docker Compose: MLflow y la API, ambos en estado *healthy*, conectados al Model Registry real del equipo."
+
+*Gerardo cambia a T3.*
+
+**D2 · Swagger, P1 (0:20) — Gerardo**
+- **Acción:** en `POST /predict/p1-demanda` pega el payload del lunes 8:00 y da clic en **Execute**; hace scroll hasta la respuesta.
+> "Hacemos una petición real: un lunes a las 8 de la mañana, en una estación con mucha actividad reciente. El modelo predice cerca de 13 viajes en la siguiente hora, con código 200."
+
+**D3 · Swagger, P2 (0:10) — Gerardo**
+- **Acción:** en `POST /predict/p2-riesgo` pega el mismo payload y da clic en **Execute**.
+> "Para la misma estación, P2 la marca en riesgo de desabasto, con probabilidad de 99.9 %."
+
+**D4 · Swagger, P3 y entrada inválida (0:15) — Gerardo**
+- **Acción:** en `POST /predict/p3-clustering` usa el ejemplo de oficina y da clic en **Execute**; después cambia el perfil a puros ceros y vuelve a dar clic en **Execute**.
+> "P3 asigna esta estación tipo oficina al clúster 1; la API normaliza el perfil igual que en el entrenamiento. Y si mandamos un perfil sin viajes, Pydantic lo rechaza con un 422."
+
+*"Jesús, ¿de dónde vienen estos modelos?" → Gerardo cambia a T4.*
+
+**D5 · MLflow UI, Model Registry (0:30) — Jesús**
+- **Acción:** Gerardo abre `mibici-equipo01-p2-riesgo` y señala con el cursor los aliases y los tags de las versiones 2 y 4.
+> "Este es el Model Registry. Los tres modelos tienen su versión 2 con el alias `champion` y el tag `stage=production`: es la que acaba de responder la API. En P2, la versión 4 es la `ab-candidate`, con `stage=evaluation`: la candidata del A/B, fuera de producción porque no superó al `champion`. Cada versión guarda la métrica con la que se eligió."
+
+*Gerardo cambia a T5.*
+
+**D6 · Reporte de Evidently (0:13) — Gemma**
+- **Acción:** Gerardo muestra el resumen del reporte de drift.
+> "Este reporte de Evidently se regenera con `mlflow run . -e drift`. Hay 4 de 21 variables con drift, por debajo del umbral global, así que el Continuous Training no reentrena."
+
+*Gerardo cambia a T6.*
+
+**D7 · GitHub Actions en verde (0:12) — Gerardo**
+- **Acción:** muestra el grafo del último run de `main`.
+> "Y este es el pipeline de CI/CD en la rama principal: calidad, pruebas en Ubuntu y macOS, construcción de la imagen, prueba de humo con Docker Compose y notificación. Todo en verde."
+
+*Gerardo regresa a T1, diapositiva 12.*
+
+### Cierre (4:25 – 4:35)
+
+**C · Cierre (0:10) — Sebastian**
+> "Así llevamos un modelo de la idea a un sistema operable: reproducible, registrado, desplegado, automatizado y monitoreado. Gracias."
+
+*Gerardo detiene la grabación.*
 
 ---
 
-**Dependencias:** #194 (sistema verificado, PR #206) · #196 y #197 (presentación) · #200 (grabación).
+## 5. Contingencias durante la grabación
+
+| Si pasa esto | Hacer esto (sin detener el video) |
+|---|---|
+| Swagger tarda en responder | Esperar en silencio; en el último caso, correr `bash scripts/test_api.sh` en T2 y narrar sobre esa salida |
+| La UI de MLflow no carga o responde 403 | Mostrar la tabla de la diapositiva 6 y continuar; antes de repetir la toma, revisar `MLFLOW_SERVER_ALLOWED_HOSTS` en `docker-compose.yml` |
+| Alguien se traba en su texto | Seguir con la siguiente frase; no regresar |
+| El cronómetro marca 4:45 antes de D7 | Saltar D7 e ir directo al cierre |
+
+---
+
+## 6. Ensayo
+
+- [ ] **Ensayo 1:** sin narración, solo los clics y cambios de ventana, para medir tiempos de carga.
+- [ ] **Ensayo 2:** completo, con cronómetro. Objetivo entre 4:15 y 4:45.
+- [ ] Verificar que en pantalla **no** aparecen `.env`, tokens, notificaciones del sistema ni archivos personales (activar "No molestar").
+- [ ] Verificar el audio: un solo micrófono o una sola voz a la vez, sin eco.
+
+## 7. Después de grabar (#200)
+
+1. Revisar que el video dure entre 2:00 y 5:00 y que no tenga cortes.
+2. Exportarlo como `TC5061_Proyecto_Final_Equipo01.mp4`.
+3. Subirlo a Canvas junto con `TC5061_Proyecto_Final_Equipo01.pdf`.
+4. Agregar la liga al video en la diapositiva 12 de la presentación (#197) y en el README (#189).
+
+---
+
+**Relacionado:** #194 (despliegue verificado) · #196 y #197 (presentación) · #199 (Continuous Training) · #200 (grabación).
