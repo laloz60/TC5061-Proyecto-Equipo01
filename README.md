@@ -426,7 +426,7 @@ El entry point entrena y registra la V2, y después compara las dos versiones (`
 
 ### 3. Gobernanza y Model Card
 
-La documentación consolidada de los tres modelos `@champion` (uso previsto, métricas de evaluación de P1/P2/P3, linaje con MLflow Model Registry, limitaciones y sesgos, política de drift/Continuous Training y perfil FinOps) se encuentra en [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
+La documentación consolidada de los tres modelos `@champion` (uso previsto, métricas de evaluación de P1/P2/P3, linaje alineado con el Model Registry, limitaciones y sesgos, política de drift/Continuous Training y perfil FinOps) se encuentra en [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
 
 ## Buenas prácticas
 
