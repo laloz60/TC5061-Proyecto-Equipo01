@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# Un PR con rama feature/fix/chore/docs dispara dos pipelines (push + pull_request).
+# Este grupo comparte la rama entre ambos eventos y cancela la corrida duplicada
+# en cuanto llega la otra, en vez de dejarlas las dos en la cola de runners.
+# En main nunca se cancela (cancel-in-progress=false) para no matar un deploy en curso.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
   packages: write
