@@ -1,15 +1,17 @@
 name: CI/CD Pipeline
 
 on:
+  # Solo push a main: el trabajo en ramas se valida con pull_request.
+  # Antes tambien disparaba push a feature/fix/chore/docs y cada PR corria
+  # dos pipelines identicos (el de push y el de pull_request).
   push:
-    branches: [main, "feature/**", "fix/**", "chore/**", "docs/**"]
+    branches: [main]
   pull_request:
     branches: [main]
 
-# Un PR con rama feature/fix/chore/docs dispara dos pipelines (push + pull_request).
-# Este grupo comparte la rama entre ambos eventos y cancela la corrida duplicada
-# en cuanto llega la otra, en vez de dejarlas las dos en la cola de runners.
-# En main nunca se cancela (cancel-in-progress=false) para no matar un deploy en curso.
+# Si se empuja un commit nuevo a un PR mientras el anterior aun corre, la
+# corrida vieja se cancela en lugar de dejar las dos en la cola de runners.
+# En main nunca se cancela (cancel-in-progress=false) para no matar un deploy.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -168,11 +170,13 @@ jobs:
 
   # Notificacion del resultado: resumen en la pagina del run y anotacion
   # (::notice / ::error) que GitHub muestra en el PR y en la pestana Checks.
+  # !cancelled(): si la corrida se cancela (commit nuevo al PR), este job no
+  # debe marcar failure por ver a sus dependencias en estado "cancelled".
   notify:
     name: Pipeline Summary (Notificación)
     runs-on: ubuntu-latest
     needs: [quality, tests, docker-build, api-smoke]
-    if: always()
+    if: always() && !cancelled()
     steps:
       - name: Write run summary and annotation
         env:
