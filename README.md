@@ -222,9 +222,9 @@ Modelos que sirve la API:
 
 | Pregunta | Modelo registrado | Versión `@champion` | Run de origen | Endpoint |
 |---|---|---|---|---|
-| P1 | `mibici-equipo01-p1-demanda` | 3 | `p1-candidate-rf-n200`, val_mae 0.8079 (`e2ee147a…`) | `POST /predict/p1-demanda` |
-| P2 | `mibici-equipo01-p2-riesgo` | 4 | `P2-parent-search-logreg`, C=0.1, val_roc_auc 0.8293 (`3d8fdf6a…`) | `POST /predict/p2-riesgo` |
-| P3 | `mibici-equipo01-p3-grupos` | 3 | `p3-candidate-k5`, val_silhouette 0.3268 (`ab2c73d6…`) | `POST /predict/p3-clustering` |
+| P1 | `mibici-equipo01-p1-demanda` | 2 | `p1-candidate-rf-n200`, val_mae 0.8075 (`c8ccdd71…`) | `POST /predict/p1-demanda` |
+| P2 | `mibici-equipo01-p2-riesgo` | 2 | `P2-parent-search-logreg`, C=0.1, val_roc_auc 0.8292 (`1cd16f9f…`) | `POST /predict/p2-riesgo` |
+| P3 | `mibici-equipo01-p3-grupos` | 2 | `p3-candidate-k3`, val_silhouette 0.4026 (`398be41f…`) | `POST /predict/p3-clustering` |
 
 La carga la hace `mibici/api/registry.py` (`load_champion`) en dos pasos:
 
@@ -239,7 +239,7 @@ python scripts/verificar_registry.py
 
 La salida del registro, el estado de cada versión y la prueba de la API con los `@champion` están en [`reports/registry_issue191.md`](reports/registry_issue191.md).
 
-> `mlflow.db` no se versiona: los números de versión de esta tabla corresponden al registry de la máquina del despliegue. Las v2 (registradas antes de la selección por validación, solo con métricas `test_*`) quedaron con `stage=archived`. P2 v3 es el `@ab-candidate` del A/B test.
+> `mlflow.db` no se versiona: esta tabla describe el registry real de este repositorio, el mismo que monta Docker Compose. Las tres versiones `@champion` (v2) llevan los tags `stage=production`, `pregunta`, `metrica_seleccion` y `valor_metrica`; P2 v4 es el `@ab-candidate` con `stage=evaluation` (no sirve tráfico); el resto de versiones (P1/P2/P3 v1 y P2 v3) es historial sin alias. El estado se re-genera con `mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e register` y se audita con `sqlite3 mlflow.db "SELECT name, version, key, value FROM model_version_tags;"` (evidencia en [`reports/registry_issue191.md`](reports/registry_issue191.md)).
 
 ### Ejecución directa (sin MLflow Project)
 

@@ -2,6 +2,8 @@
 
 Evidencia del issue #191. Ensayo en un registry local (`mlflow.db` + `mlruns/`, servidor en `http://127.0.0.1:5000`), el 24 nov 2026, rama `feature/issue-191-registry`.
 
+> **Nota (issue #209):** las secciones de abajo documentan el ensayo original de #191, hecho en un registry distinto al del despliegue. La ejecución de `register` contra el `mlflow.db` real de este repositorio (25 nov 2026) quedó documentada al final del documento; sus resultados son los que reflejan el README y el Model Card.
+
 ## Cambios en `mibici/modeling/register.py`
 
 - La versión elegida se marca con el alias `@champion` y los tags `stage=production`, `pregunta`, `metrica_seleccion` y `valor_metrica`.
@@ -84,3 +86,42 @@ El cambio de P3 de k=3 a k=5 no altera el contrato de la API: la entrada sigue s
 ## Capturas
 
 UI de MLflow (versiones, aliases, descripción y tags) en `reports/figures/registry_issue191/`.
+
+---
+
+## Ejecución en el registry del despliegue (2026-11-25, issue #209)
+
+El registry anterior era de otra máquina: `mlflow.db` no está trackeada en git, así que el README y el Model Card describían versiones (`v3`/`v4`/`v3`) y `run_id` que no existen en el registry real. Se corrió `register` contra el `mlflow.db` de este repositorio:
+
+```bash
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db python -m mibici.modeling.register
+```
+
+Salida:
+
+```
+mibici-equipo01-p1-demanda ya esta registrado desde este run (v2); se actualiza.
+mibici-equipo01-p1-demanda v2 <- p1-candidate-rf-n200 (val_mae=0.8075)
+mibici-equipo01-p2-riesgo ya esta registrado desde este run (v2); se actualiza.
+mibici-equipo01-p2-riesgo v4 (@ab-candidate) marcado como evaluation
+mibici-equipo01-p2-riesgo v2 <- P2-parent-search-logreg (val_roc_auc=0.8292)
+mibici-equipo01-p3-grupos ya esta registrado desde este run (v2); se actualiza.
+mibici-equipo01-p3-grupos v2 <- p3-candidate-k3 (val_silhouette_score=0.4026)
+```
+
+Ningún `@champion` cambió de versión (los runs elegidos ya estaban registrados), así que **la API no cambió de modelo**: solo se agregaron descripciones y tags.
+
+Estado final verificado con SQL:
+
+| Modelo | Versión | Alias | `stage` | Métrica de selección |
+|---|---:|---|---|---|
+| `mibici-equipo01-p1-demanda` | 2 | `@champion` | `production` | `val_mae=0.8075` |
+| `mibici-equipo01-p2-riesgo` | 2 | `@champion` | `production` | `val_roc_auc=0.8292` |
+| `mibici-equipo01-p2-riesgo` | 4 | `@ab-candidate` | `evaluation` | — (no sirve tráfico) |
+| `mibici-equipo01-p3-grupos` | 2 | `@champion` | `production` | `val_silhouette_score=0.4026` |
+
+```bash
+sqlite3 mlflow.db "SELECT name, version, key, value FROM model_version_tags ORDER BY name, version;"
+```
+
+Verificación de la API tras el registro (`main` @ `68b4cab`, `docker compose up -d --build --wait`): `scripts/test_api.sh` **5/5 en verde** (health 200, P1 200, P2 200, P3 200, payload inválido 422), con las mismas respuestas que antes del registro. Los tags se resuelven desde el contenedor (`mibici-api-1`) vía `MlflowClient`.
