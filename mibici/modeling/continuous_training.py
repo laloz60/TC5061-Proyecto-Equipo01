@@ -13,17 +13,62 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import mlflow
 from mlflow.exceptions import MlflowException
+from mlflow.models import infer_signature
+import mlflow.sklearn
 from mlflow.tracking import MlflowClient
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
+from mibici import config
+
+# Estados alineados con mibici/modeling/register.py (PR #208 y PR #211)
 STAGE_PRODUCTION = "production"
-STAGE_EVALUACION = "evaluacion"
+STAGE_EVALUATION = "evaluation"
 STAGE_ARCHIVED = "archived"
+
+# Ventana extendida sin fuga temporal (deja el split test 2025-07..2026-10 intacto)
+CT_TRAIN_END = "2025-03-31"
+CT_VAL_START = "2025-04-01"
+CT_VAL_END = "2025-06-30"
+
+FEATURE_COLS_P2 = [
+    "hora_del_dia",
+    "dia_semana",
+    "mes",
+    "es_fin_de_semana",
+    "salidas_lag_1h",
+    "salidas_lag_24h",
+    "salidas_lag_168h",
+    "salidas_media_7d",
+    "salidas_prom_4sem",
+    "neto_lag_1h",
+    "neto_lag_24h",
+    "neto_media_7d",
+    "capacidad",
+    "latitud",
+    "longitud",
+]
+
+_CANDIDATAS_FECHA = ("hora", "fecha_hora", "timestamp", "fecha", "hora_inicio", "datetime")
+_CANDIDATAS_TARGET = (
+    "riesgo",
+    "en_riesgo",
+    "target_riesgo",
+    "riesgo_desabasto_o_saturacion",
+    "y_riesgo",
+    "label_riesgo",
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +98,63 @@ def _inferir_pregunta(model_name: str) -> str:
     if "-p3-" in nombre:
         return "P3"
     return "P2"
+
+
+def _es_mayor_mejor(metric_name: str) -> bool:
+    """Indica si valores más altos de la métrica representan un mejor modelo."""
+    nombre = metric_name.lower()
+    return not any(token in nombre for token in ("mae", "rmse", "mse", "loss", "error"))
+
+
+def _leer_git_commit(proj_root: Path) -> str:
+    """Obtiene el SHA actual leyendo .git/HEAD sin invocar subprocess (limpio en Bandit)."""
+    head_path = proj_root / ".git" / "HEAD"
+    if not head_path.exists():
+        return "desconocido"
+
+    contenido = head_path.read_text(encoding="utf-8").strip()
+    if not contenido.startswith("ref: "):
+        return contenido
+
+    ref = contenido.removeprefix("ref: ").strip()
+    ref_path = proj_root / ".git" / ref
+    if ref_path.exists():
+        return ref_path.read_text(encoding="utf-8").strip()
+
+    packed_refs = proj_root / ".git" / "packed-refs"
+    if packed_refs.exists():
+        for linea in packed_refs.read_text(encoding="utf-8").splitlines():
+            if not linea.startswith("#") and linea.endswith(f" {ref}"):
+                return linea.split(" ", 1)[0].strip()
+
+    return "desconocido"
+
+
+def _sha256_corto(path: Path) -> str:
+    """Calcula los primeros 16 caracteres del SHA-256 de un archivo."""
+    if not path.exists():
+        return "?"
+    hasher = hashlib.sha256()
+    with path.open("rb") as archivo:
+        for bloque in iter(lambda: archivo.read(1 << 20), b""):
+            hasher.update(bloque)
+    return hasher.hexdigest()[:16]
+
+
+def _detectar_columna(df: pd.DataFrame, candidatas: tuple[str, ...], tipo: str) -> str:
+    """Encuentra el nombre de columna esperado dentro del DataFrame de features."""
+    for col in candidatas:
+        if col in df.columns:
+            return col
+    if tipo == "fecha":
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                return col
+    disponibles = ", ".join(df.columns)
+    raise KeyError(
+        f"No se encontró la columna de {tipo} en features_estacion_hora.parquet. "
+        f"Esperadas: {candidatas}. Disponibles: {disponibles}"
+    )
 
 
 def leer_reporte_drift(report_path: Path) -> DriftStatus:
@@ -118,16 +220,109 @@ def reentrenar_y_registrar_candidata(
     model_name: str,
     metric_name: str,
 ) -> tuple[str, float]:
-    """Reentrena P2 con ventana extendida y registra nueva versión sin mover @champion.
+    """Reentrena P2 con ventana extendida y registra nueva versión sin mover alias."""
+    proj_root = getattr(config, "PROJ_ROOT", Path.cwd())
+    data_dir = getattr(config, "DATA_DIR", proj_root / "data")
+    processed_dir = getattr(config, "PROCESSED_DATA_DIR", data_dir / "processed")
+    seed = int(getattr(config, "SEED", 42))
 
-    TODO(#193): Conectar aquí la función real de entrenamiento con ventana
-    extendida de ``mibici/modeling/ab_testing.py`` (o ``train.py``) y el helper de
-    linaje de ``mibici/modeling/register.py`` para escribir descripción y tags.
-    """
-    raise NotImplementedError(
-        "Conectar con el entrenamiento de ventana extendida de ab_testing.py "
-        "y devolver (candidate_version, candidate_val_metric)."
+    features_path = processed_dir / "features_estacion_hora.parquet"
+    if not features_path.exists():
+        raise FileNotFoundError(
+            f"No existe {features_path}. Ejecuta primero: mlflow run . -e features"
+        )
+
+    df = pd.read_parquet(features_path)
+    fecha_col = _detectar_columna(df, _CANDIDATAS_FECHA, "fecha")
+    target_col = _detectar_columna(df, _CANDIDATAS_TARGET, "target")
+    feature_cols = [c for c in FEATURE_COLS_P2 if c in df.columns]
+    if len(feature_cols) != len(FEATURE_COLS_P2):
+        faltantes = sorted(set(FEATURE_COLS_P2) - set(feature_cols))
+        raise KeyError(f"Faltan columnas de features de P2: {faltantes}")
+
+    fechas = pd.to_datetime(df[fecha_col])
+    cols_necesarias = [*feature_cols, target_col]
+    df_train = df.loc[fechas <= CT_TRAIN_END, cols_necesarias].dropna()
+    df_val = df.loc[(fechas >= CT_VAL_START) & (fechas <= CT_VAL_END), cols_necesarias].dropna()
+
+    if df_train.empty or df_val.empty:
+        raise ValueError(
+            f"Split vacío para Continuous Training: train={len(df_train)}, val={len(df_val)}"
+        )
+
+    X_train, y_train = df_train[feature_cols], df_train[target_col].astype(int)
+    X_val, y_val = df_val[feature_cols], df_val[target_col].astype(int)
+
+    modelo = Pipeline(
+        steps=[
+            ("scaler", StandardScaler()),
+            (
+                "clf",
+                LogisticRegression(
+                    C=0.1,
+                    class_weight="balanced",
+                    max_iter=1000,
+                    random_state=seed,
+                ),
+            ),
+        ]
     )
+    modelo.fit(X_train, y_train)
+    probs_val = modelo.predict_proba(X_val)[:, 1]
+    val_auc = float(roc_auc_score(y_val, probs_val))
+
+    commit = _leer_git_commit(proj_root)
+    manifest_sha = _sha256_corto(data_dir / "manifest.json")
+    parquet_sha = _sha256_corto(features_path)
+
+    with mlflow.start_run(run_name="P2-continuous-training-candidate", nested=True) as run:
+        mlflow.log_params(
+            {
+                "model_family": "LogisticRegression",
+                "C": 0.1,
+                "train_end": CT_TRAIN_END,
+                "val_start": CT_VAL_START,
+                "val_end": CT_VAL_END,
+                "train_rows": len(df_train),
+                "val_rows": len(df_val),
+                "seed": seed,
+                "data_manifest_sha256": manifest_sha,
+                "data_parquet_sha256": parquet_sha,
+            }
+        )
+        mlflow.set_tags(
+            {
+                "equipo": "01",
+                "pregunta": _inferir_pregunta(model_name),
+                "stage_of_work": "continuous_training",
+                "commit": commit,
+            }
+        )
+        mlflow.log_metric(metric_name, val_auc)
+
+        muestra = X_val.head(5)
+        signature = infer_signature(muestra, modelo.predict(muestra))
+        model_info = mlflow.sklearn.log_model(
+            modelo,
+            name="model",
+            signature=signature,
+            input_example=muestra,
+        )
+        run_id = run.info.run_id
+        model_uri = model_info.model_uri
+
+    # Registra nueva versión sin mover @champion ni @ab-candidate
+    mv = mlflow.register_model(model_uri, model_name)
+    descripcion = (
+        f"Candidato de Continuous Training ({_inferir_pregunta(model_name)}) "
+        f"entrenado hasta {CT_TRAIN_END} y validado en {CT_VAL_START}..{CT_VAL_END}. "
+        f"Run de origen: P2-continuous-training-candidate ({run_id}). "
+        f"Commit: {commit}. Datos: manifest {manifest_sha} / features {parquet_sha}. "
+        f"{metric_name}={val_auc:.4f}. Registrado con mibici/modeling/continuous_training.py."
+    )
+    client.update_model_version(model_name, mv.version, description=descripcion)
+
+    return str(mv.version), val_auc
 
 
 def decidir_promocion(
@@ -172,13 +367,18 @@ def ejecutar_continuous_training(
         )
 
     cand_ver, cand_val = reentrenar_y_registrar_candidata(client, model_name, metric_name)
-    gana = decidir_promocion(champion_val, cand_val, higher_is_better=True)
+    gana = decidir_promocion(
+        champion_val,
+        cand_val,
+        higher_is_better=_es_mayor_mejor(metric_name),
+    )
     pregunta = _inferir_pregunta(model_name)
 
     client.set_model_version_tag(model_name, cand_ver, "pregunta", pregunta)
     client.set_model_version_tag(model_name, cand_ver, "metrica_seleccion", metric_name)
     client.set_model_version_tag(model_name, cand_ver, "valor_metrica", f"{cand_val:.4f}")
 
+    champ_str = f"{champion_val:.4f}" if champion_val is not None else "N/A"
     if gana:
         client.set_registered_model_alias(model_name, "champion", cand_ver)
         client.set_model_version_tag(model_name, cand_ver, "stage", STAGE_PRODUCTION)
@@ -186,13 +386,13 @@ def ejecutar_continuous_training(
             client.set_model_version_tag(model_name, champion_ver, "stage", STAGE_ARCHIVED)
         reason = (
             f"Candidata v{cand_ver} ({metric_name}={cand_val:.4f}) superó a "
-            f"@champion v{champion_ver} ({champion_val}): alias promovido."
+            f"@champion v{champion_ver} ({champ_str}): alias promovido."
         )
     else:
-        client.set_model_version_tag(model_name, cand_ver, "stage", STAGE_EVALUACION)
+        client.set_model_version_tag(model_name, cand_ver, "stage", STAGE_EVALUATION)
         reason = (
             f"Candidata v{cand_ver} ({metric_name}={cand_val:.4f}) no superó a "
-            f"@champion v{champion_ver} ({champion_val:.4f}): se mantiene @champion."
+            f"@champion v{champion_ver} ({champ_str}): se mantiene @champion."
         )
 
     return PromotionDecision(
@@ -218,19 +418,23 @@ def main() -> None:
     parser.add_argument("--force-retrain", type=str, default="false")
     args = parser.parse_args()
 
-    decision = ejecutar_continuous_training(
-        drift_report=args.drift_report,
-        model_name=args.model_name,
-        metric_name=args.metric,
-        force_retrain=_parse_bool(args.force_retrain),
-    )
+    force = _parse_bool(args.force_retrain)
+    run_kwargs: dict[str, Any] = {}
+    if not os.environ.get("MLFLOW_RUN_ID"):
+        run_kwargs["run_name"] = "P2-continuous-training-check"
 
-    with mlflow.start_run(run_name="P2-continuous-training-check"):
+    with mlflow.start_run(**run_kwargs):
+        decision = ejecutar_continuous_training(
+            drift_report=args.drift_report,
+            model_name=args.model_name,
+            metric_name=args.metric,
+            force_retrain=force,
+        )
         mlflow.log_params(
             {
                 "model_name": args.model_name,
                 "metric": args.metric,
-                "force_retrain": _parse_bool(args.force_retrain),
+                "force_retrain": force,
             }
         )
         mlflow.set_tags(
