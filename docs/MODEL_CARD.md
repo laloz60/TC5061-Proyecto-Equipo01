@@ -127,8 +127,8 @@ Evaluado sobre **4,231,300 filas** del split `test` (`2025-07-01` a `2026-09-30`
 * **Hallazgo vigente:** **4 de 21 variables (19%)** superaron el umbral individual (`0.10`): `mes` (`0.337`), `estacion_id` (`0.255`), `neto_media_7d` (`0.133`) y `salidas_media_7d` (`0.118`). Al no alcanzar el umbral global del `50%`, no existe drift a nivel dataset.
 * **Política de Continuous Training (`mlflow run . -e continuous_training`):**
   1. **Disparador:** Lee `reports/drift_report.json` generado por Evidently; no activa reentrenamiento automático por *covariate shift* localizado. Solo dispara reentrenamiento cuando `dataset_drift == true` (`≥50%` de columnas con drift) o en ejecución controlada con `force_retrain=true`.
-  2. **Reentrenamiento y versionado:** Entrena el modelo candidato con ventana temporal extendida (`train + val`) y lo registra como nueva versión en el Model Registry con linaje completo.
-  3. **Regla de promoción:** Compara la candidata contra `@champion` usando la misma métrica de validación (`val_roc_auc` para P2). El alias `@champion` y el tag `stage=production` solo se mueven si la candidata supera estrictamente al vigente (archivando la versión previa como `stage=archived`); de lo contrario, queda marcada como `stage=evaluacion`.
+  2. **Reentrenamiento y versionado:** Reentrena P2 con ventana temporal extendida (`2023-05` a `2025-03`) y valida en `2025-04..2025-06` (manteniendo `test` intacto), registrando la nueva versión en el Model Registry con linaje completo y sin alterar `@ab-candidate`.
+  3. **Regla de promoción:** Compara la candidata contra `@champion` usando la misma métrica de validación (`val_roc_auc`). El alias `@champion` y el tag `stage=production` solo se mueven si la candidata supera estrictamente al vigente (archivando la versión previa como `stage=archived`); de lo contrario, queda marcada como `stage=evaluation`.
 
 ---
 
