@@ -220,9 +220,17 @@ La comparación de baseline contra candidato de cada pregunta está en [`reports
 | P3 | `mibici-equipo01-p3-grupos` | v2 `@champion` | `p3-candidate-k3` (`398be41f…`) | `val_silhouette_score = 0.4026` |
 
 
-- Busca primero entre las corridas con tag `stage_of_work=candidate`; si ninguna tiene modelo logueado, usa todas las corridas de la pregunta.
+- Busca primero entre las corridas con tag `stage_of_work=candidate`; si ninguna tiene modelo logueado, usa todas las corridas de la pregunta. Las corridas sin la métrica de validación se omiten, porque no son comparables.
 - Cada versión lleva en su descripción el linaje: run de origen, commit y hashes del manifiesto y del Parquet.
-- No registra dos veces el mismo run: re-ejecutarlo es seguro.
+- No registra dos veces el mismo run: re-ejecutarlo es seguro y solo completa descripción, tags y alias.
+- **Estado de cada versión** (tag `stage`):
+
+  | Tag `stage` | Alias | Significado |
+  |---|---|---|
+  | `production` | `@champion` | La versión que sirve la API. Lleva también `pregunta`, `metrica_seleccion` y `valor_metrica`. |
+  | `evaluation` | `@ab-candidate` | Retador del A/B test de P2 (ver [Monitoreo](#monitoreo-drift-y-ab-testing-actividad-9)); no sirve tráfico. |
+  | `archived` | — | Versión que dejó de ser `@champion`; se conserva como historial. |
+
 - **Ciclo de vida:** la versión en producción se marca con el alias `@champion` y se carga por nombre:
 
   ```python
@@ -247,11 +255,13 @@ El Registry guarda sus metadatos en `mlflow.db` y los artefactos en `mlruns/`; n
 
 Modelos que sirve la API:
 
-| Pregunta | Modelo registrado | Versión `@champion` | Run de origen y métrica de validación | Endpoint |
-|---|---|---:|---|---|
-| P1 | `mibici-equipo01-p1-demanda` | 2 | `p1-candidate-rf-n200` (`c8ccdd71…`), `val_mae=0.8075` | `POST /predict/p1-demanda` |
-| P2 | `mibici-equipo01-p2-riesgo` | 2 | `P2-parent-search-logreg`, C=0.1 (`1cd16f9f…`), `val_roc_auc=0.8292` | `POST /predict/p2-riesgo` |
-| P3 | `mibici-equipo01-p3-grupos` | 2 | `p3-candidate-k3` (`398be41f…`), `val_silhouette_score=0.4026` | `POST /predict/p3-clustering` |
+| Pregunta | Modelo registrado | Versión `@champion` | Run de origen | Endpoint |
+|---|---|---|---|---|
+| P1 | `mibici-equipo01-p1-demanda` | 3 | `p1-candidate-rf-n200`, val_mae 0.8079 (`e2ee147a…`) | `POST /predict/p1-demanda` |
+| P2 | `mibici-equipo01-p2-riesgo` | 4 | `P2-parent-search-logreg`, C=0.1, val_roc_auc 0.8293 (`3d8fdf6a…`) | `POST /predict/p2-riesgo` |
+| P3 | `mibici-equipo01-p3-grupos` | 3 | `p3-candidate-k5`, val_silhouette 0.3268 (`ab2c73d6…`) | `POST /predict/p3-clustering` |
+
+La carga la hace `mibici/api/registry.py` (`load_champion`) en dos pasos:
 
 P2 v4 tiene el alias `@ab-candidate` y `stage=evaluation`; no sirve tráfico de producción. Las versiones `@champion` tienen `stage=production`. La evidencia del registro está en [`reports/registry_issue191.md`](reports/registry_issue191.md).
 
@@ -260,6 +270,10 @@ Para revisar las versiones y aliases de un Registry local:
 ```bash
 python scripts/verificar_registry.py
 ```
+
+La salida del registro, el estado de cada versión y la prueba de la API con los `@champion` están en [`reports/registry_issue191.md`](reports/registry_issue191.md).
+
+> `mlflow.db` no se versiona: los números de versión de esta tabla corresponden al registry de la máquina del despliegue. Las v2 (registradas antes de la selección por validación, solo con métricas `test_*`) quedaron con `stage=archived`. P2 v3 es el `@ab-candidate` del A/B test.
 
 ### Ejecución directa (sin MLflow Project)
 
@@ -338,7 +352,7 @@ El proyecto incluye pruebas con `pytest`, validación de datos con `DeepChecks` 
 - `tests/test_features.py` (13): cálculo de features por estación y hora, lags, media móvil, calendario, split temporal y etiqueta de riesgo de P2. Cubre casos límite como horas sin viajes, estación que empieza en su primer viaje y llegadas fuera de la ventana. Incluye `test_sin_fuga_de_informacion`.
 - `tests/test_modeling.py` (13): fechas de `config`, hash del parquet, tags de MLflow, métricas de regresión, selección por validación, silhouette de P3 y perfil de ventana. Casos límite: silhouette con una sola fila (`NaN`) y ventana de perfil vacía.
 - `tests/test_reproducibilidad.py` (3): dos entrenamientos con la misma semilla dan las mismas predicciones y métricas; con semilla distinta cambian (control negativo); Ridge es estable entre corridas.
-- `tests/test_register.py` (13): detección de modelo logueado, selección del mejor run por métrica de validación, fallback a corridas previas e idempotencia del registro con alias `@champion`.
+- `tests/test_register.py` (19): detección de modelo logueado, selección del mejor run por métrica de validación (omite corridas sin `val_*`), fallback a corridas previas, idempotencia, tags `stage=production`, archivado del champion anterior y `@ab-candidate` en evaluación.
 - `tests/test_proxy_riesgo.py` (11): construcción de la tabla de riesgo de P2, sensibilidad al umbral, top de estaciones y plots. Casos límite: estación sin desbalance, estación inexistente en nomenclatura y corte `n` exacto.
 - `tests/test_data_validation.py` (2): validación del esquema y de la corrida completa de DeepChecks (esta última corre solo con el entorno de validación creado).
 - `tests/test_ab_testing.py` (17): A/B testing de P2: métricas, selección de umbral por F1, prueba de McNemar, tabla comparativa V2 − V1, veredicto de promoción, sensibilidad modelo × umbral y flujo completo que registra la V2 sin mover `@champion`.
@@ -469,7 +483,7 @@ De cada periodo se toman 30,000 filas con `config.SEED` para que el reporte quep
 mlflow run . -e drift --env-manager=uv
 ```
 
-Salida: `reports/drift_report.html` (reporte interactivo) y `reports/drift_report.json` (métricas por variable).
+Salida: [`reports/drift_report.html`](reports/drift_report.html) (reporte interactivo) y [`reports/drift_report.json`](reports/drift_report.json) (métricas por variable).
 
 ### 2. A/B Testing del modelo P2 (Riesgo)
 
@@ -481,7 +495,13 @@ Las dos versiones se evalúan sobre **el mismo conjunto**: el split `test` (2025
 mlflow run . -e ab_test --env-manager=uv
 ```
 
-El entry point entrena y registra la V2, y después compara las dos versiones (`python -m mibici.modeling.ab_testing run`). Requiere el servidor de MLflow levantado y la V1 registrada con el alias `@champion`. Salida: `reports/ab_testing_p2.md`, `reports/ab_testing_p2.csv` y las gráficas en `reports/figures/ab_testing_p2/`.
+El entry point entrena y registra la V2, y después compara las dos versiones (`python -m mibici.modeling.ab_testing run`). Requiere el servidor de MLflow levantado y la V1 registrada con el alias `@champion`. Salida: [`reports/ab_testing_p2.md`](reports/ab_testing_p2.md), [`reports/ab_testing_p2.csv`](reports/ab_testing_p2.csv) y las gráficas en [`reports/figures/ab_testing_p2/`](reports/figures/ab_testing_p2/).
+
+> **No re-ejecutar `-e ab_test` sin acordarlo:** entrena y registra otra versión de P2 y mueve `@ab-candidate`. Los reportes versionados corresponden a la corrida documentada en [`reports/reporte_actividad9.md`](reports/reporte_actividad9.md).
+
+### 3. Gobernanza y Model Card
+
+La documentación consolidada de los tres modelos `@champion` (uso previsto, métricas de evaluación de P1/P2/P3, linaje alineado con el Model Registry, limitaciones y sesgos, política de drift/Continuous Training y perfil FinOps) se encuentra en [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
 
 ## Buenas prácticas
 

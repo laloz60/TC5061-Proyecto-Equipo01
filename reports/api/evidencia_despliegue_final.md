@@ -100,7 +100,96 @@ Consistente con el análisis de FinOps (MLflow ~1.9 GiB, API ~1.1 GiB en reposo)
 
 Con la corrección, los conteos y las proporciones del mismo perfil producen el mismo clúster (sección 4).
 
-## 7. Apagado
+## 7. Re-verificación (2026-11-24, `main` @ `b358908`)
+
+Corrida de confirmación tras el merge del PR #203, con el registry real y las imágenes reconstruidas:
+
+| Dato | Valor |
+|---|---|
+| Commit | `b358908` (`main`) |
+| Comando | `docker compose up -d --build --wait` (con build de las dos imágenes) |
+| Tiempo total de arranque en frío | **75 s** (incluye `docker build`; sin rebuild fue 13 s el23/11) |
+| Estado final | `mibici-api-1` y `mibici-mlflow-1` **healthy** |
+| Registry | `MIBICI_MOCK_REGISTRY=0` → `mlflow.db` y `mlruns/` del equipo |
+
+`docker compose ps`:
+
+```
+NAME              STATUS                    PORTS
+mibici-api-1      Up (healthy)              0.0.0.0:8000->8000/tcp
+mibici-mlflow-1   Up (healthy)              0.0.0.0:5001->5000/tcp
+```
+
+Aliases en el Model Registry (los 3 modelos con estado de producción explícito):
+
+| Modelo | Versión `@champion` | Otros aliases |
+|---|---|---|
+| `mibici-equipo01-p1-demanda` | v2 | — |
+| `mibici-equipo01-p2-riesgo` | v2 | v4 → `ab-candidate` (A/B, en evaluación) |
+| `mibici-equipo01-p3-grupos` | v2 | — |
+
+`bash scripts/test_api.sh http://localhost:8000` — **5/5 pruebas en verde**:
+
+| Prueba | Respuesta | HTTP |
+|---|---|---|
+| `GET /health` | `{"status":"healthy","modelos_cargados":["p1","p2","p3"]}` | 200 |
+| `POST /predict/p1-demanda` | `{"demanda_predicha_viajes":5.620645371371251}` | 200 |
+| `POST /predict/p2-riesgo` | `{"riesgo_desabasto_o_saturacion":1,"probabilidad_riesgo":0.7448901989148815}` | 200 |
+| `POST /predict/p3-clustering` | `{"cluster_asignado":1}` | 200 |
+| Payload inválido | validación Pydantic | 422 |
+
+Swagger (`http://localhost:8000/docs`, HTTP 200) sirve los 4 endpoints declarados en `/openapi.json`:
+
+```
+GET  /health              - Health Check
+POST /predict/p1-demanda  - Predict P1
+POST /predict/p2-riesgo   - Predict P2
+POST /predict/p3-clustering - Predict P3
+```
+
+> **Actualizado el 2026-11-25** (ver sección 8): el #191 sí se fusionó, pero **no cambió este registry** — ver hallazgo B.
+
+## 8. Re-verificación tras los merges de #191, #192, #195 y #199 (2026-11-25, `main` @ `38d320f`)
+
+Corrida de validación completa antes de cerrar el issue, porque el merge del #191 (Registry) podía cambiar la versión `@champion` y invalidar esta evidencia:
+
+| Verificación | Resultado |
+|---|---|
+| `docker compose up -d --build --wait` | ✅ ambos **healthy** en **14 s** (imágenes en caché) |
+| `bash scripts/test_api.sh` | ✅ **5/5**: health 200, P1 200, P2 200, P3 200, payload inválido 422 |
+| Swagger `/docs` | ✅ 200 con los 4 endpoints |
+| `pytest tests/` | ✅ **99 passed** en 45 s |
+| CI en `main` | ✅ run `45658015658` (`38d320f`) `success` |
+| Aliases del registry | ✅ sin cambios: P1 v2 `@champion`, P2 v2 `@champion` + v4 `@ab-candidate`, P3 v2 `@champion` |
+| Modelos cargados por la API | ✅ `m-1627f3d5…`, `m-64e60b83…`, `m-f301c3bd…` = las versiones `@champion` v2 |
+
+### Hallazgo A (corregido): la UI de MLflow daba 403 desde el navegador
+
+`http://localhost:5001` respondía `403 Invalid Host header`: `MLFLOW_SERVER_ALLOWED_HOSTS` solo incluía variantes de `:5000`, pero el puerto **publicado** en el host es el 5001, así que el `Host: localhost:5001` del navegador no estaba permitido. La API no se veía afectada (habla por la red interna con `mlflow:5000`), pero la UI del registry era inabrible desde el navegador y el guion de la demo (bloque 4) la necesita.
+
+**Corrección** en `docker-compose.yml`: se agregaron `localhost:5001` y `127.0.0.1:5001` a la lista. Verificado tras recrear el servicio:
+
+```
+GET /                                              -> 200
+GET /api/2.0/mlflow/registered-models/search      -> 200
+```
+
+### Hallazgo B (sin corregir, requiere decisión del equipo): el README no coincide con el registry real
+
+El #191 documentó en el README unas versiones que **no existen en el `mlflow.db` del equipo**:
+
+| | README (`main`) | Registry real (`mlflow.db`) |
+|---|---|---|
+| P1 `@champion` | **v3**, `val_mae=0.8079` (`e2ee147a…`) | **v2** (`c8ccdd71…`), sin tags |
+| P2 `@champion` | **v4**, `val_roc_auc=0.8293` (`3d8fdf6a…`) | **v2** (`1cd16f9f…`), sin tags |
+| P3 `@champion` | **v3**, `val_silhouette=0.3268` (`ab2c73d6…`) | **v2** (`398be41f…`), sin tags |
+| Tags `stage=production` | documentados | **ninguno** (`model_version_tags` vacía) |
+
+Causa: `mlflow.db` **no está trackeada en git** y el PR #208 solo trajo `register.py`, el README y las capturas. La corrida de `register` del #191 se hizo contra un registry distinto (el de la máquina donde se ensayó), cuyos `run_id` (`e2ee147a`, `3d8fdf6a`, `ab2c73d6`) **no existen** en esta base. Por eso la API sigue sirviendo las v2 — que es lo que esta evidencia documenta.
+
+**Efecto en la entrega:** la API funciona y sirve los `@champion` correctos, pero si alguien verifica el README contra la UI verá la discrepancia. Ver issue nuevo ligado a #189/#191.
+
+## 9. Apagado
 
 ```bash
 docker compose down     # mlflow.db y mlruns/ quedan en el host

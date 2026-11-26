@@ -1,4 +1,4 @@
-"""Pruebas del Model Registry (issue #95): selección, descripción e idempotencia.
+"""Pruebas del Model Registry (issues #95 y #191): selección, descripción, tags e idempotencia.
 
 Los tests de integración usan un backend MLflow propio en sqlite bajo tmp_path,
 así no tocan el mlflow.db del proyecto.
@@ -12,7 +12,12 @@ import pytest
 import typer
 
 from mibici.modeling import register
-from mibici.modeling.register import _descripcion, _mejor_run_con_modelo, _run_tiene_modelo
+from mibici.modeling.register import (
+    _descripcion,
+    _mejor_run_con_modelo,
+    _run_tiene_modelo,
+    _tags_produccion,
+)
 from mibici.modeling.tracking import EXPERIMENT_NAME
 
 NOMBRE_P1 = "mibici-equipo01-p1-demanda"
@@ -160,6 +165,16 @@ def test_mejor_run_cae_a_las_corridas_previas_si_no_hay_candidato(tracking_tmp):
     assert run.info.run_id == padre
 
 
+def test_mejor_run_ignora_runs_sin_la_metrica_de_validacion(tracking_tmp):
+    # caso real de P3: candidatos viejos con modelo pero sin val_*; no deben ganar
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    _crear_run("P3", "candidate", "test_silhouette_score", 0.20)
+    con_val = _crear_run("P3", "previo", "val_silhouette_score", 0.33)
+
+    run = _mejor_run_con_modelo(MlflowClient(), "p3", "val_silhouette_score", "DESC")
+    assert run.info.run_id == con_val
+
+
 def test_mejor_run_sin_experimento_lanza_error_claro(tracking_tmp):
     # backend vacio: el error debe ser accionable, no un None silencioso
     with pytest.raises(typer.BadParameter, match="No existe el experimento"):
@@ -195,3 +210,80 @@ def test_registrar_es_idempotente_y_apunta_champion(tracking_tmp):
     modelo = cliente.get_registered_model(NOMBRE_P1)
     assert "val_mae" in modelo.description  # descripcion con linaje y metrica
     assert alias.run_id is not None
+
+
+# --------------------------------------------------------------------------
+# estado de produccion (issue #191): tags, archivado y @ab-candidate
+# --------------------------------------------------------------------------
+
+def _tags(cliente, version):
+    return cliente.get_model_version(NOMBRE_P1, str(version)).tags
+
+
+def test_tags_produccion_lleva_stage_pregunta_y_metrica():
+    tags = _tags_produccion("p1", "val_mae", 0.80791)
+    assert tags == {
+        "stage": "production",
+        "pregunta": "P1",
+        "metrica_seleccion": "val_mae",
+        "valor_metrica": "0.8079",
+    }
+
+
+def test_registrar_marca_el_champion_como_produccion(tracking_tmp):
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    _crear_run("P1", "candidate", "val_mae", 0.80)
+
+    register._registrar("p1")
+    cliente = MlflowClient()
+    champion = cliente.get_model_version_by_alias(NOMBRE_P1, "champion")
+    assert champion.tags["stage"] == "production"
+    assert champion.tags["metrica_seleccion"] == "val_mae"
+    assert champion.tags["valor_metrica"] == "0.8000"
+    assert "val_mae" in champion.description
+
+
+def test_registrar_archiva_el_champion_anterior(tracking_tmp):
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    _crear_run("P1", "candidate", "val_mae", 0.90)
+    register._registrar("p1")
+
+    # aparece un candidato mejor: nueva version champion, la anterior se archiva
+    _crear_run("P1", "candidate", "val_mae", 0.70)
+    register._registrar("p1")
+
+    cliente = MlflowClient()
+    champion = cliente.get_model_version_by_alias(NOMBRE_P1, "champion")
+    assert str(champion.version) == "2"
+    assert _tags(cliente, 2)["stage"] == "production"
+    assert _tags(cliente, 1)["stage"] == "archived"
+
+
+def test_registrar_completa_tags_de_una_version_ya_registrada(tracking_tmp):
+    # caso de las v2 actuales: el run ya esta registrado, pero sin tags ni alias
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    run_id = _crear_run("P1", "candidate", "val_mae", 0.80)
+    mlflow.register_model(f"runs:/{run_id}/model", NOMBRE_P1)
+
+    register._registrar("p1")
+    cliente = MlflowClient()
+    assert len(cliente.search_model_versions(f"name='{NOMBRE_P1}'")) == 1
+    assert _tags(cliente, 1)["stage"] == "production"
+    assert str(cliente.get_model_version_by_alias(NOMBRE_P1, "champion").version) == "1"
+
+
+def test_registrar_marca_ab_candidate_como_evaluacion(tracking_tmp):
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    _crear_run("P1", "candidate", "val_mae", 0.80)
+    retador = _crear_run("P1", "ab_test", "val_mae", 0.95)
+    cliente = MlflowClient()
+    version_ab = mlflow.register_model(f"runs:/{retador}/model", NOMBRE_P1).version
+    cliente.set_registered_model_alias(NOMBRE_P1, "ab-candidate", version_ab)
+
+    register._registrar("p1")
+    ab = cliente.get_model_version_by_alias(NOMBRE_P1, "ab-candidate")
+    assert str(ab.version) == str(version_ab)  # el alias no se mueve
+    assert ab.tags["stage"] == "evaluation"
+    assert "No esta en produccion" in ab.description
+    champion = cliente.get_model_version_by_alias(NOMBRE_P1, "champion")
+    assert str(champion.version) != str(version_ab)
