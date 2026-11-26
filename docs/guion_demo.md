@@ -29,7 +29,7 @@ Abrir en este orden (nada se abre durante la grabación):
 | T2 | Terminal A | Sistema ya levantado (ver abajo) |
 | T3 | Navegador — Swagger | <http://localhost:8000/docs> |
 | T4 | Navegador — MLflow UI | <http://localhost:5001> → modelos `mibici-equipo01-*` |
-| T5 | Navegador — Evidently | `reports/drift_report_evidently.html` (abierto con `open reports/drift_report_evidently.html`) |
+| T5 | Navegador — Evidently | `reports/drift_report.html` (abierto con `open reports/drift_report.html`) |
 | T6 | Navegador — GitHub Actions | Run en verde de `main` |
 
 **Sistema levantado y verificado antes de grabar** (no construir imágenes durante la grabación):

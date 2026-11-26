@@ -6,7 +6,7 @@ Evidencia del issue #191. Ensayo en un registry local (`mlflow.db` + `mlruns/`, 
 
 - La versión elegida se marca con el alias `@champion` y los tags `stage=production`, `pregunta`, `metrica_seleccion` y `valor_metrica`.
 - La versión que deja de ser `@champion` queda con `stage=archived`; no se borra.
-- La versión con alias `@ab-candidate` (retador del A/B test de P2) queda con `stage=evaluacion` y una descripción que indica que no sirve tráfico.
+- La versión con alias `@ab-candidate` (retador del A/B test de P2) queda con `stage=evaluation` y una descripción que indica que no sirve tráfico. (En el ensayo de abajo el valor todavía era `evaluacion`; se cambió a `evaluation` para coincidir con `continuous_training.py` y el Model Card.)
 - Si el mejor run ya está registrado, no crea otra versión: completa descripción, tags y alias. Re-ejecutar es seguro.
 - La selección omite las corridas sin la métrica de validación. Sin este filtro, P3 elegía `p3-candidate-k6`, una corrida anterior a las métricas `val_*`, y el registro fallaba al formatear la métrica vacía.
 
