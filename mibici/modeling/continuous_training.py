@@ -21,6 +21,10 @@ import mlflow
 from mlflow.exceptions import MlflowException
 from mlflow.tracking import MlflowClient
 
+STAGE_PRODUCTION = "production"
+STAGE_EVALUACION = "evaluacion"
+STAGE_ARCHIVED = "archived"
+
 
 @dataclass(frozen=True)
 class DriftStatus:
@@ -41,6 +45,16 @@ class PromotionDecision:
     reason: str
 
 
+def _inferir_pregunta(model_name: str) -> str:
+    """Devuelve P1, P2 o P3 a partir del nombre del modelo registrado."""
+    nombre = model_name.lower()
+    if "-p1-" in nombre:
+        return "P1"
+    if "-p3-" in nombre:
+        return "P3"
+    return "P2"
+
+
 def leer_reporte_drift(report_path: Path) -> DriftStatus:
     """Extrae el estado de drift a nivel dataset desde reports/drift_report.json."""
     if not report_path.exists():
@@ -50,7 +64,6 @@ def leer_reporte_drift(report_path: Path) -> DriftStatus:
 
     data: dict[str, Any] = json.loads(report_path.read_text(encoding="utf-8"))
 
-    # TODO(#193): Verificar las llaves exactas que escribe mibici/monitoring/drift.py.
     # Soporta formato resumido propio o estructura estándar de Evidently.
     if "dataset_drift" in data:
         return DriftStatus(
@@ -84,11 +97,17 @@ def obtener_champion_actual(
     except MlflowException:
         return None, None
 
-    # 1. Busca primero en tags de la versión (alineado con Issue #191)
-    if mv.tags and metric_name in mv.tags:
-        return str(mv.version), float(mv.tags[metric_name])
+    tags = mv.tags or {}
 
-    # 2. Respaldo: lee la métrica del run de origen
+    # 1. Formato oficial del Registry (Issue #191): metrica_seleccion + valor_metrica
+    if tags.get("metrica_seleccion") == metric_name and "valor_metrica" in tags:
+        return str(mv.version), float(tags["valor_metrica"])
+
+    # 2. Compatibilidad si la métrica se guardó directamente como llave de tag
+    if metric_name in tags:
+        return str(mv.version), float(tags[metric_name])
+
+    # 3. Respaldo: lee la métrica del run de origen
     run = client.get_run(mv.run_id)
     metric_val = run.data.metrics.get(metric_name)
     return str(mv.version), (float(metric_val) if metric_val is not None else None)
@@ -101,7 +120,7 @@ def reentrenar_y_registrar_candidata(
 ) -> tuple[str, float]:
     """Reentrena P2 con ventana extendida y registra nueva versión sin mover @champion.
 
-    TODO(#191 / #193): Conectar aquí la función real de entrenamiento con ventana
+    TODO(#193): Conectar aquí la función real de entrenamiento con ventana
     extendida de ``mibici/modeling/ab_testing.py`` (o ``train.py``) y el helper de
     linaje de ``mibici/modeling/register.py`` para escribir descripción y tags.
     """
@@ -154,20 +173,23 @@ def ejecutar_continuous_training(
 
     cand_ver, cand_val = reentrenar_y_registrar_candidata(client, model_name, metric_name)
     gana = decidir_promocion(champion_val, cand_val, higher_is_better=True)
+    pregunta = _inferir_pregunta(model_name)
+
+    client.set_model_version_tag(model_name, cand_ver, "pregunta", pregunta)
+    client.set_model_version_tag(model_name, cand_ver, "metrica_seleccion", metric_name)
+    client.set_model_version_tag(model_name, cand_ver, "valor_metrica", f"{cand_val:.4f}")
 
     if gana:
         client.set_registered_model_alias(model_name, "champion", cand_ver)
-        client.set_model_version_tag(model_name, cand_ver, "stage", "production")
-        client.set_model_version_tag(model_name, cand_ver, metric_name, f"{cand_val:.6f}")
+        client.set_model_version_tag(model_name, cand_ver, "stage", STAGE_PRODUCTION)
         if champion_ver is not None:
-            client.set_model_version_tag(model_name, champion_ver, "stage", "archived")
+            client.set_model_version_tag(model_name, champion_ver, "stage", STAGE_ARCHIVED)
         reason = (
             f"Candidata v{cand_ver} ({metric_name}={cand_val:.4f}) superó a "
             f"@champion v{champion_ver} ({champion_val}): alias promovido."
         )
     else:
-        client.set_model_version_tag(model_name, cand_ver, "stage", "evaluation")
-        client.set_model_version_tag(model_name, cand_ver, metric_name, f"{cand_val:.6f}")
+        client.set_model_version_tag(model_name, cand_ver, "stage", STAGE_EVALUACION)
         reason = (
             f"Candidata v{cand_ver} ({metric_name}={cand_val:.4f}) no superó a "
             f"@champion v{champion_ver} ({champion_val:.4f}): se mantiene @champion."
