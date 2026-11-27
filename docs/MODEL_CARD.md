@@ -3,7 +3,7 @@
 | Metadato | Valor |
 |---|---|
 | **Proyecto** | `TC5061-Proyecto-Equipo01` |
-| **Versión del documento** | `v1.0` |
+| **Versión del documento** | `v1.1` |
 | **Fecha de última actualización** | `2026-11-25` |
 | **Materia** | Operaciones de Aprendizaje Automático (TC5061.10) - Maestría en Inteligencia Artificial Aplicada, Tecnológico de Monterrey |
 | **Repositorio** | https://github.com/laloz60/TC5061-Proyecto-Equipo01 |
@@ -17,16 +17,16 @@ El servicio API REST (`mibici/api/`) carga dinámicamente tres modelos registrad
 
 | Pregunta | Nombre en Model Registry | Versión / Alias | Estado (`stage`) | Familia / Run de origen | Métrica de selección (`val_*`) | Commit | Endpoint REST |
 |---|---|---|---|---|---|---|---|
-| **P1 (Regresión)** | `mibici-equipo01-p1-demanda` | v3 `@champion` | `production` | `RandomForestRegressor` — `p1-candidate-rf-n200` (`e2ee147a…`) | `val_mae`: `0.8079` | `97b7e22` | `POST /predict/p1-demanda` |
-| **P2 (Clasificación)** | `mibici-equipo01-p2-riesgo` | v4 `@champion` | `production` | `LogisticRegression` (`C=0.1`) — `P2-parent-search-logreg` (`3d8fdf6a…`) | `val_roc_auc`: `0.8293` | `97b7e22` | `POST /predict/p2-riesgo` |
-| **P2 (Candidato A/B)** | `mibici-equipo01-p2-riesgo` | v3 `@ab-candidate` | `evaluacion` *(no en producción)* | `LogisticRegression` — `P2-v2-ventana-extendida` (ventana `2023-05` a `2025-06`, umbral `0.70`) | Evaluado en A/B test sobre `test` (`reports/ab_testing_p2.md`) | — | No expuesto en API |
-| **P3 (Clustering)** | `mibici-equipo01-p3-grupos` | v3 `@champion` | `production` | `KMeans++` (`k=5`) — `p3-candidate-k5` (`ab2c73d6…`) | `val_silhouette_score`: `0.3268` | `97b7e22` | `POST /predict/p3-clustering` |
+| **P1 (Regresión)** | `mibici-equipo01-p1-demanda` | v2 `@champion` | `production` | `RandomForestRegressor` — `p1-candidate-rf-n200` (`c8ccdd71…`) | `val_mae`: `0.8075` | `87ae4e16` | `POST /predict/p1-demanda` |
+| **P2 (Clasificación)** | `mibici-equipo01-p2-riesgo` | v2 `@champion` | `production` | `LogisticRegression` (`C=0.1`) — `P2-parent-search-logreg` (`1cd16f9f…`) | `val_roc_auc`: `0.8292` | `87ae4e16` | `POST /predict/p2-riesgo` |
+| **P2 (Candidato A/B)** | `mibici-equipo01-p2-riesgo` | v4 `@ab-candidate` | `evaluation` *(no en producción)* | `LogisticRegression` — `P2-v2-ventana-extendida` (`890243a0…`, ventana `2023-05` a `2025-06`, umbral `0.70`) | Evaluado en A/B test sobre `test` (`reports/ab_testing_p2.md`) | — | No expuesto en API |
+| **P3 (Clustering)** | `mibici-equipo01-p3-grupos` | v2 `@champion` | `production` | `KMeans++` (`k=3`) — `p3-candidate-k3` (`398be41f…`) | `val_silhouette_score`: `0.4026` | `87ae4e16` | `POST /predict/p3-clustering` |
 
 **Linaje de datos y ciclo de vida en MLflow:**
-* **Commit de entrenamiento (`@champion` P1, P2 y P3):** `97b7e22236b4a974e4a8d0b320026dca47b07822` (`97b7e22`).
-* **Hash de `data/manifest.json`:** `7db3fa3702f6b57f` (registrado en P2 v4 y P3 v3; en P1 v3 el run original `e2ee147a…` no registró este parámetro en MLflow).
-* **Hash del Parquet unificado:** `ed2f4783e3a3ec77` (15,376,153 viajes sin los 758 duplicados exactos de 2026-09; registrado en P2 v4 y P3 v3).
-* **Tags obligatorios por versión:** Cada `@champion` lleva `stage=production`, `pregunta` (`P1`/`P2`/`P3`), `metrica_seleccion` y `valor_metrica`. Las versiones v2 anteriores (registradas antes de la selección por métricas `val_*`) se conservan con `stage=archived`, y P2 v3 (`@ab-candidate`) se mantiene con `stage=evaluacion` sin recibir tráfico.
+* **Commit de entrenamiento (`@champion` P1, P2 y P3):** `87ae4e16677a2792703b088cd01fe839ef5711de` (`87ae4e16`).
+* **Hash de `data/manifest.json` / Parquet unificado:** registrados solo en P2 v2 (`ceff081f0174f2c8` / `fbb830d06a019f81`); los runs de P1 y P3 no logearon estos parámetros en MLflow.
+* **Tags obligatorios por versión:** Cada `@champion` (v2) lleva `stage=production`, `pregunta` (`P1`/`P2`/`P3`), `metrica_seleccion` y `valor_metrica`. P2 v4 (`@ab-candidate`) lleva `stage=evaluation` sin recibir tráfico; las versiones restantes (v1 y P2 v3) no tienen alias ni tag de estado.
+* **Auditoría:** el estado anterior se regenera con `mlflow run . --experiment-name mibici-equipo01 --env-manager uv -e register` (idempotente) y se verifica con `sqlite3 mlflow.db "SELECT name, version, key, value FROM model_version_tags;"` o desde la UI en `http://localhost:5001`. Evidencia de la última corrida en `reports/registry_issue191.md`.
 
 ---
 
@@ -60,8 +60,10 @@ El servicio API REST (`mibici/api/`) carga dinámicamente tres modelos registrad
 
 ### 4.1 Comparativa Baseline vs. Candidato (`reports/baseline_vs_candidato.md`)
 
+> **Nota de consistencia (issue #209):** las tablas de esta sección reproducen `reports/baseline_vs_candidato.md` (commit `97b7e22`, parquet `ed2f4783`). El registry de producción de la Sección 1 sirve las versiones v2: en P2 opera con umbral `0.50` (métricas en 4.2, columna V1) y en P3 con `k=3` (`val_silhouette 0.4026`, `test_silhouette 0.2072`), no con `k=5`.
+
 **P1 — Demanda horaria por estación (Regresión)**  
-Baseline: `P1-baseline` (promedio de la misma hora en las 4 semanas previas). Candidato (`@champion` v3): `p1-candidate-rf-n200` (menor `val_mae` entre candidatos con métricas de validación).
+Baseline: `P1-baseline` (promedio de la misma hora en las 4 semanas previas). Candidato (hoy `@champion` v2): `p1-candidate-rf-n200` (menor `val_mae` entre candidatos con métricas de validación).
 
 | Métrica | Baseline `val` | Candidato `val` | Delta `val` | Baseline `test` | Candidato `test` | Delta `test` |
 |---|---:|---:|---:|---:|---:|---:|
@@ -72,7 +74,7 @@ Baseline: `P1-baseline` (promedio de la misma hora en las 4 semanas previas). Ca
 *Lectura:* El candidato mejora las tres métricas en ambas ventanas; el mayor avance en RMSE indica menor frecuencia de errores grandes (en MAE la ganancia en `test` es de `0.056` viajes/hora). `GradientBoostingRegressor` obtuvo `test_mae = 0.7836`, pero no se eligió por no registrar métricas `val_*` (para evitar fuga de selección sobre `test`).
 
 **P2 — Riesgo de vaciado o saturación (Clasificación)**  
-Baseline: `P2-baseline-dummy` (nunca predice riesgo). Candidato (`@champion` v4): `P2-parent-search-logreg` (`C=0.1`, umbral `0.7` elegidos en validación).
+Baseline: `P2-baseline-dummy` (nunca predice riesgo). Candidato: `P2-parent-search-logreg` (`C=0.1` elegido en validación); la versión en producción (v2 `@champion`) opera con umbral `0.50` y la tabla documenta la evaluación con umbral `0.70`.
 
 | Métrica | Baseline `val` | Candidato `val` | Delta `val` | Baseline `test` | Candidato `test` | Delta `test` |
 |---|---:|---:|---:|---:|---:|---:|
@@ -84,7 +86,7 @@ Baseline: `P2-baseline-dummy` (nunca predice riesgo). Candidato (`@champion` v4)
 *Lectura:* El candidato discrimina eventos de riesgo (`ROC AUC = 0.8240` en `test`), detectando ~37% de los casos positivos con ~11.5% de precisión. El umbral `0.7` quedó en el límite superior de la malla evaluada (`0.3` a `0.7`), por lo que umbrales superiores podrían ofrecer otro balance precisión/recall.
 
 **P3 — Agrupamiento de estaciones (Clustering)**  
-Baseline: `p3-baseline-k5` (`KMeans` aleatorio, `n_init=1`). Candidato (`@champion` v3): `p3-candidate-k5` (`k-means++`, `n_init=10`). Se comparan con el mismo `K=5` porque el *silhouette* no es comparable entre distintos valores de `K`.
+Baseline: `p3-baseline-k5` (`KMeans` aleatorio, `n_init=1`). Candidato del experimento: `p3-candidate-k5` (`k-means++`, `n_init=10`); se comparan con el mismo `K=5` porque el *silhouette* no es comparable entre distintos valores de `K`. **En producción sirve `p3-candidate-k3` (v2 `@champion`), el mejor `val_silhouette` (`0.4026`) entre los candidatos con métricas de validación; su `test_silhouette` es `0.2072`.**
 
 | Métrica | Baseline `val` | Candidato `val` | Delta `val` | Baseline `test` | Candidato `test` | Delta `test` |
 |---|---:|---:|---:|---:|---:|---:|
@@ -94,9 +96,9 @@ Baseline: `p3-baseline-k5` (`KMeans` aleatorio, `n_init=1`). Candidato (`@champi
 
 ### 4.2 A/B Testing en P2 (`mibici-equipo01-p2-riesgo`)
 
-Evaluado sobre **4,231,300 filas** del split `test` (`2025-07-01` a `2026-09-30`), contrastando el modelo base del experimento (V1, entrenado hasta `2024-12` con umbral `0.50`, actualmente `v2` archivada tras promover `v4` por validación) frente al retador V2 (`v3` `@ab-candidate`, `P2-v2-ventana-extendida`, ventana `2023-05-01` a `2025-06-30`, umbral `0.70`):
+Evaluado sobre **4,231,300 filas** del split `test` (`2025-07-01` a `2026-09-30`), contrastando el modelo base del experimento (V1, entrenado hasta `2024-12` con umbral `0.50`, **actualmente v2 `@champion` en producción**) frente al retador V2 (**v4 `@ab-candidate`**, `P2-v2-ventana-extendida`, ventana `2023-05-01` a `2025-06-30`, umbral `0.70`):
 
-| Métrica | V1 (umbral 0.50) | V2 (`@ab-candidate` v3, umbral 0.70) | Diferencia ($\Delta = V2 - V1$) |
+| Métrica | V1 (umbral 0.50) | V2 (`@ab-candidate` v4, umbral 0.70) | Diferencia ($\Delta = V2 - V1$) |
 |---|---:|---:|---:|
 | **ROC AUC** | `0.8239` | `0.8248` | `+0.0008` |
 | **Average Precision** | `0.1283` | `0.1287` | `+0.0005` |
@@ -105,7 +107,7 @@ Evaluado sobre **4,231,300 filas** del split `test` (`2025-07-01` a `2026-09-30`
 | **F1 macro** | `0.5129` | `0.5638` | `+0.0509` |
 
 * **Sensibilidad al umbral:** V1 evaluada con umbral `0.70` alcanza `F1 macro = 0.5640` (vs. `0.5638` de V2), y V2 con umbral `0.50` obtiene `0.5123` (vs. `0.5129` de V1). Aunque el test exacto de McNemar es significativo ($p < 0.0001$; `32,983` aciertos exclusivos de V1 vs. `527,409` de V2), la diferencia proviene del umbral y no del reentrenamiento.
-* **Decisión vigente:** Mantener `@ab-candidate` (`v3`) con `stage=evaluacion` sin promoverlo a producción y servir `@champion` (`v4`), acordando con operación cualquier ajuste de umbral según el costo relativo de falsas alertas frente a desabastos no detectados.
+* **Decisión vigente:** Mantener `@ab-candidate` (`v4`) con `stage=evaluation` sin promoverlo a producción y servir `@champion` (`v2`), acordando con operación cualquier ajuste de umbral según el costo relativo de falsas alertas frente a desabastos no detectados.
 
 ---
 
