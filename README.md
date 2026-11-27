@@ -746,8 +746,9 @@ Las 2 réplicas en el mismo host reducen el p95 89% en A (2300 - 260 ms) y 69% e
 ## Entrega Final
 
 - **Model Card:** [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
-- **Presentación final:** **PENDIENTE**
-- **Video de demostración:** **PENDIENTE**
+- **Presentación final:** [`reports\Proyecto_Final_MLOps_MiBici_Equipo_01.pdf`](reports\Proyecto_Final_MLOps_MiBici_Equipo_01.pdf)
+- **Video de demostración:** [reports/TC5061_Proyecto_Final_Equipo01.mp4`](reports/TC5061_Proyecto_Final_Equipo01.mp4).
+- **Video link:** https://drive.google.com/file/d/1MHG6Gge-Puyc_Gz18gUsAN0UPiH404DX/view?usp=sharing
 
 ## Estructura del repositorio
 ```
