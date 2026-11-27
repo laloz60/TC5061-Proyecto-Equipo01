@@ -28,39 +28,106 @@ Cada integrante habla alrededor de un minuto.
 
 ## 2. Preparación antes de grabar
 
-### 2.1 Ventanas abiertas en este orden (nada se abre durante la grabación)
+### 2.1 Comandos, en orden (15 minutos antes de grabar)
 
-| Ventana | Contenido | Estado inicial |
-|---|---|---|
-| **T1** | `reports/TC5061_Proyecto_Final_Equipo01.pdf` | Pantalla completa, en la diapositiva 1 |
-| **T2** | Terminal en la raíz del repo | Sistema ya levantado; pantalla limpia (`clear`) |
-| **T3** | Swagger: <http://localhost:8000/docs> | Sección `POST /predict/p1-demanda` expandida, con **Try it out** activado |
-| **T4** | MLflow UI: <http://localhost:5001> → pestaña **Models** | Lista con los 3 modelos `mibici-equipo01-*` |
-| **T5** | `reports/drift_report.html` (`open reports/drift_report.html`) | Al inicio del resumen de drift |
-| **T6** | GitHub Actions: último run de `main` en verde | Página **Summary** con el grafo de jobs |
+Todos se ejecutan en la **Terminal** de la Mac de Gerardo. Copiar cada bloque completo.
 
-Zoom del navegador a **90 %** para que se vean completos el grafo del CI y las respuestas de Swagger.
-
-### 2.2 Sistema levantado y verificado (15 minutos antes)
-
+**Paso 1. Ir al repositorio y actualizar `main`**
 ```bash
-docker compose up -d --build --wait            # api y mlflow en healthy
-docker compose ps                              # confirmar ambos healthy
-bash scripts/test_api.sh http://localhost:8000 # 5 pruebas: 200 x4 y 422
+cd ~/Documents/MaestriaTecMonterrey/CuartoTrimestre/MLOps/Semana_5/TC5061-Proyecto-Equipo01
+git switch main
+git pull --ff-only origin main
 ```
 
-### 2.3 Revisión de 30 segundos justo antes de grabar
-
+**Paso 2. Abrir Docker Desktop y esperar a que esté listo**
 ```bash
-docker compose ps                                          # healthy
-curl -s localhost:8000/health                              # {"status":"healthy","modelos_cargados":["p1","p2","p3"]}
-curl -s -o /dev/null -w "%{http_code}\n" localhost:5001/   # 200
+open -a Docker
+until docker info >/dev/null 2>&1; do sleep 2; done; echo "Docker listo"
+```
+
+**Paso 3. Confirmar que los puertos 8000 y 5001 están libres**
+```bash
+lsof -nP -iTCP:8000 -iTCP:5001 -sTCP:LISTEN
+```
+Resultado esperado: **ninguna línea**. Si aparece un proceso, detenerlo (por ejemplo, otro backend en el 8000) antes de seguir.
+
+**Paso 4. Levantar el sistema**
+```bash
+docker compose up -d --build --wait
+```
+Resultado esperado: termina sin error con `mibici-mlflow-1` y `mibici-api-1` en `Healthy`.
+
+**Paso 5. Verificar el sistema**
+```bash
+docker compose ps
+bash scripts/test_api.sh http://localhost:8000
+```
+Resultado esperado: los dos servicios `(healthy)`; en `test_api.sh`, `HTTP status: 200` en las pruebas 1 a 4 y `HTTP status: 422` en la 5.
+
+**Paso 6. Abrir las ventanas** (en una ventana nueva del navegador, para que las pestañas queden en el orden de ⌘1 a ⌘4)
+```bash
+open reports/TC5061_Proyecto_Final_Equipo01.pdf
+open "http://localhost:8000/docs"
+open "http://localhost:5001/#/models"
+open reports/drift_report.html
+gh run view "$(gh run list -b main -L 1 --json databaseId --jq '.[0].databaseId')" --web
+```
+
+| Ventana | Atajo | Qué se abrió | Dejarla así antes de grabar |
+|---|---|---|---|
+| **T1** | Vista Previa | `TC5061_Proyecto_Final_Equipo01.pdf` | **Visualización → Pase de diapositivas** (⇧⌘F), en la diapositiva 1; se avanza con → |
+| **T2** | Terminal | Esta misma terminal | Letra grande (⌘+ dos o tres veces); se limpia en el paso 7 |
+| **T3** | ⌘1 | Swagger | Expandir `POST /predict/p1-demanda` → **Try it out** → pegar el payload del lunes 8:00 (sección 2.4). Lo mismo en `POST /predict/p2-riesgo`. En `POST /predict/p3-clustering` → **Try it out** (dejar el ejemplo de oficina) |
+| **T4** | ⌘2 | MLflow UI, **Models** | Abrir `mibici-equipo01-p2-riesgo`, donde se ven la versión 2 (`champion`) y la 4 (`ab-candidate`) |
+| **T5** | ⌘3 | Reporte de Evidently | Al inicio del resumen de drift |
+| **T6** | ⌘4 | Último run de `main` en GitHub Actions | Página **Summary** con el grafo de jobs en verde |
+
+Zoom del navegador a **90 %** (⌘ y −) para que se vean completos el grafo del CI y las respuestas de Swagger.
+
+**Paso 7. Revisión de 30 segundos, justo antes de presionar grabar**
+```bash
+docker compose ps
+curl -s localhost:8000/health
+curl -s -o /dev/null -w "%{http_code}\n" localhost:5001/
 clear
 ```
+Resultado esperado: ambos `(healthy)`; `{"status":"healthy","modelos_cargados":["p1","p2","p3"]}`; `200`. El `clear` deja la terminal vacía para el bloque D1.
 
-### 2.4 Payloads preparados para Swagger (copiar a un archivo de notas, no a la pantalla grabada)
+### 2.2 Comandos durante la grabación
 
-**P1 y P2: lunes 8:00, estación con alta demanda reciente**
+Solo hay **un** comando en todo el video (bloque D1, en T2):
+```bash
+docker compose ps
+```
+Todo lo demás son clics en Swagger, MLflow, Evidently y GitHub Actions.
+
+**Solo en caso de emergencia** (si Swagger no responde, ver sección 5):
+```bash
+bash scripts/test_api.sh http://localhost:8000
+```
+
+### 2.3 Comandos después de grabar
+
+```bash
+docker compose down
+```
+Apaga los contenedores; `mlflow.db` y `mlruns/` se quedan en la carpeta del proyecto.
+
+### 2.4 Payloads (JSON) para Swagger
+
+El *payload* es el cuerpo JSON de la petición: lo que se pega en el cuadro **Request body** de Swagger. Se pegan **antes de grabar** (paso 6); durante el video solo se da clic en **Execute**. Tener una copia en otro dispositivo o impresa, nunca en la pantalla que se graba.
+
+**Cómo pegar un payload en Swagger**
+1. Dar clic en el endpoint para expandirlo y luego en **Try it out**.
+2. Dar clic dentro del cuadro **Request body**, seleccionar todo (⌘A) y borrarlo.
+3. Pegar el JSON (⌘V). **No dar Execute** hasta la grabación.
+
+Respuestas verificadas con el sistema levantado y los `@champion` v2 del Model Registry.
+
+#### Payload A — P1 y P2: lunes 8:00, estación con alta demanda reciente
+
+Se pega **el mismo JSON** en `POST /predict/p1-demanda` y en `POST /predict/p2-riesgo` (los dos modelos usan las mismas 15 variables).
+
 ```json
 {"hora_del_dia": 8, "dia_semana": 0, "mes": 10, "es_fin_de_semana": 0,
  "salidas_lag_1h": 12.0, "salidas_lag_24h": 14.0, "salidas_lag_168h": 13.0,
@@ -68,19 +135,51 @@ clear
  "neto_lag_1h": -6.0, "neto_lag_24h": -5.0, "neto_media_7d": -3.0,
  "capacidad": 20.0, "latitud": 20.6736, "longitud": -103.3440}
 ```
-Respuesta esperada: P1 ≈ **12.9 viajes**; P2 **riesgo 1** con probabilidad ≈ **0.9995**.
 
-**P3: perfil horario de una estación tipo oficina** (es el ejemplo que ya trae Swagger)
+| Campo | Valor | Significado |
+|---|---|---|
+| `hora_del_dia`, `dia_semana`, `mes`, `es_fin_de_semana` | 8, 0, 10, 0 | Lunes (0 = lunes) a las 8:00, en octubre, entre semana |
+| `salidas_lag_1h`, `salidas_lag_24h`, `salidas_lag_168h` | 12, 14, 13 | Bicis que salieron hace 1 hora, a la misma hora ayer y hace una semana |
+| `salidas_media_7d`, `salidas_prom_4sem` | 11.5, 12.0 | Promedios recientes de salidas: estación con mucha demanda |
+| `neto_lag_1h`, `neto_lag_24h`, `neto_media_7d` | −6, −5, −3 | Salen más bicis de las que llegan: la estación se está vaciando |
+| `capacidad`, `latitud`, `longitud` | 20, 20.6736, −103.3440 | Estación de 20 anclajes en el centro de Guadalajara |
+
+Respuestas esperadas (código **200**):
+```json
+{"demanda_predicha_viajes": 12.897289839069314}
+```
+```json
+{"riesgo_desabasto_o_saturacion": 1, "probabilidad_riesgo": 0.9994939017750084}
+```
+Se narra como "cerca de 13 viajes" y "en riesgo, con 99.9 %".
+
+#### Payload B — P3: perfil horario de una estación tipo oficina
+
+En `POST /predict/p3-clustering`. **Es el ejemplo que ya trae Swagger**: basta con **Try it out** y dejarlo como está.
+
 ```json
 {"perfil_horario": [0,0,0,0,0,1,4,12,20,10,6,5,6,6,5,6,9,15,18,9,5,3,1,0]}
 ```
-Respuesta esperada: **`cluster_asignado: 1`**.
 
-**Entrada inválida (para mostrar el 422)**
+Son los viajes en cada hora del día, de las 0 a las 23 h: picos a las 8 h (20 viajes) y a las 18 h (18 viajes), típico de una zona de oficinas. La API lo convierte en proporciones, igual que en el entrenamiento.
+
+Respuesta esperada (código **200**):
+```json
+{"cluster_asignado": 1}
+```
+
+#### Payload C — P3: entrada inválida, para mostrar el 422
+
+En el mismo `POST /predict/p3-clustering`, **durante la grabación** y después de ejecutar el payload B: reemplazar el contenido del cuadro por este JSON y dar **Execute** otra vez.
+
 ```json
 {"perfil_horario": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
 ```
-Respuesta esperada: **422** con el mensaje "el perfil horario debe tener al menos un viaje".
+
+Un perfil sin viajes no se puede normalizar, así que Pydantic lo rechaza. Respuesta esperada (código **422**), con el mensaje:
+```text
+Value error, el perfil horario debe tener al menos un viaje (suma mayor que 0)
+```
 
 ---
 
@@ -190,15 +289,34 @@ La diapositiva 13 (fuentes de imágenes) no se muestra en el video.
 *Gerardo cambia a T3.*
 
 **D2 · Swagger, P1 (0:20) — Gerardo**
-- **Acción:** en `POST /predict/p1-demanda` pega el payload del lunes 8:00 y da clic en **Execute**; hace scroll hasta la respuesta.
+- **Acción:** en `POST /predict/p1-demanda`, que ya tiene pegado el **payload A**, da clic en **Execute** y baja hasta **Responses**.
+- **Payload A** (ya pegado desde la preparación):
+  ```json
+  {"hora_del_dia": 8, "dia_semana": 0, "mes": 10, "es_fin_de_semana": 0,
+   "salidas_lag_1h": 12.0, "salidas_lag_24h": 14.0, "salidas_lag_168h": 13.0,
+   "salidas_media_7d": 11.5, "salidas_prom_4sem": 12.0,
+   "neto_lag_1h": -6.0, "neto_lag_24h": -5.0, "neto_media_7d": -3.0,
+   "capacidad": 20.0, "latitud": 20.6736, "longitud": -103.3440}
+  ```
+- **En pantalla:** código **200** y `{"demanda_predicha_viajes": 12.897…}`.
 > "Hacemos una petición real: un lunes a las 8 de la mañana, en una estación con mucha actividad reciente. El modelo predice cerca de 13 viajes en la siguiente hora, con código 200."
 
 **D3 · Swagger, P2 (0:10) — Gerardo**
-- **Acción:** en `POST /predict/p2-riesgo` pega el mismo payload y da clic en **Execute**.
+- **Acción:** en `POST /predict/p2-riesgo`, que ya tiene pegado **el mismo payload A**, da clic en **Execute** y baja hasta **Responses**.
+- **En pantalla:** código **200** y `{"riesgo_desabasto_o_saturacion": 1, "probabilidad_riesgo": 0.9994…}`.
 > "Para la misma estación, P2 la marca en riesgo de desabasto, con probabilidad de 99.9 %."
 
 **D4 · Swagger, P3 y entrada inválida (0:15) — Gerardo**
-- **Acción:** en `POST /predict/p3-clustering` usa el ejemplo de oficina y da clic en **Execute**; después cambia el perfil a puros ceros y vuelve a dar clic en **Execute**.
+- **Acción 1:** en `POST /predict/p3-clustering`, con el **payload B** (el ejemplo de oficina que ya trae Swagger), da clic en **Execute**.
+  ```json
+  {"perfil_horario": [0,0,0,0,0,1,4,12,20,10,6,5,6,6,5,6,9,15,18,9,5,3,1,0]}
+  ```
+- **En pantalla:** código **200** y `{"cluster_asignado": 1}`.
+- **Acción 2:** en el mismo cuadro, selecciona todo (⌘A), pega el **payload C** y da clic en **Execute** otra vez.
+  ```json
+  {"perfil_horario": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+  ```
+- **En pantalla:** código **422** y el mensaje "el perfil horario debe tener al menos un viaje".
 > "P3 asigna esta estación tipo oficina al clúster 1; la API normaliza el perfil igual que en el entrenamiento. Y si mandamos un perfil sin viajes, Pydantic lo rechaza con un 422."
 
 *"Jesús, ¿de dónde vienen estos modelos?" → Gerardo cambia a T4.*
